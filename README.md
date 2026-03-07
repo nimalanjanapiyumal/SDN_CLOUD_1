@@ -25,7 +25,7 @@ Ready-to-deploy project package for:
 ## What changed in this ready package
 - Fixed the controller-side overload/stickiness logic by using explicit backend `max_connections` instead of normalizing by current maximum active connections.
 - Split controller, dashboard, and dataplane dependencies so the dashboard venv does **not** try to install Ryu.
-- Added an automated **patched Ryu installer** for Python 3.10+.
+- Added an automated **patched Ryu installer** for Python 3.10+ that avoids the unsupported `--no-use-pep517` flag and falls back to `setup.py install` when needed.
 - Added ready bootstrap scripts for controller, dataplane, and dashboard VMs.
 
 ## Folder layout
@@ -66,3 +66,16 @@ python dashboard/flask_dashboard/app.py
 ```
 
 Open the dashboard at `http://<vm-ip>:5000`.
+
+
+## Safer startup commands
+```bash
+bash manage.sh controller bootstrap
+bash manage.sh controller start
+bash manage.sh controller logs
+```
+
+To start controller + dashboard on the same VM:
+```bash
+bash start_parallel.sh
+```

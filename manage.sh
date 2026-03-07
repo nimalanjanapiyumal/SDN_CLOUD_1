@@ -13,24 +13,14 @@ usage() {
   cat <<USAGE
 Usage:
   bash manage.sh fix-perms
-  bash manage.sh controller bootstrap|start|stop|restart|status
-  bash manage.sh dashboard  bootstrap|start|stop|restart|status
+  bash manage.sh controller bootstrap|start|stop|restart|status|logs
+  bash manage.sh dashboard  bootstrap|start|stop|restart|status|logs
   bash manage.sh dataplane  bootstrap|start|status
-
-Examples:
-  bash manage.sh fix-perms
-  bash manage.sh controller bootstrap
-  bash manage.sh controller start
-  bash manage.sh dashboard bootstrap
-  bash manage.sh dashboard start
-  CTRL_IP=10.0.0.11 bash manage.sh dataplane bootstrap
-  CTRL_IP=10.0.0.11 bash manage.sh dataplane start
+  bash manage.sh stack      bootstrap|start|stop|restart|status
 USAGE
 }
 
-fix_perms() {
-  bash "$ROOT_DIR/scripts/fix_permissions.sh"
-}
+fix_perms() { bash "$ROOT_DIR/scripts/fix_permissions.sh"; }
 
 start_bg() {
   local name="$1"
@@ -42,9 +32,18 @@ start_bg() {
     exit 0
   fi
   nohup "$@" >"$logfile" 2>&1 &
-  echo $! > "$pidfile"
-  echo "[OK] Started $name (PID $!)"
-  echo "[LOG] tail -f $logfile"
+  local pid=$!
+  echo "$pid" > "$pidfile"
+  sleep 3
+  if kill -0 "$pid" 2>/dev/null; then
+    echo "[OK] Started $name (PID $pid)"
+    echo "[LOG] tail -f $logfile"
+  else
+    echo "[ERROR] $name failed to stay running. Last log lines:"
+    tail -n 40 "$logfile" || true
+    rm -f "$pidfile"
+    exit 1
+  fi
 }
 
 stop_bg() {
@@ -72,7 +71,13 @@ status_bg() {
     echo "[OK] $name running with PID $(cat "$pidfile")"
   else
     echo "[INFO] $name not running"
+    return 1
   fi
+}
+
+logs_bg() {
+  local name="$1"
+  tail -n 80 "$LOG_DIR/${name}.log"
 }
 
 controller_bootstrap() {
@@ -81,11 +86,11 @@ controller_bootstrap() {
 }
 controller_start() {
   bash "$ROOT_DIR/scripts/fix_permissions.sh"
-  start_bg controller bash "$ROOT_DIR/vm-a1-controller/run_controller.sh"
+  start_bg controller bash -lc "cd '$ROOT_DIR/vm-a1-controller' && source '$ROOT_DIR/.venv-controller/bin/activate' && bash ./run_controller.sh"
 }
 controller_stop() { stop_bg controller; }
 controller_status() { status_bg controller; }
-
+controller_logs() { logs_bg controller; }
 
 dashboard_bootstrap() {
   bash "$ROOT_DIR/scripts/fix_permissions.sh"
@@ -93,12 +98,11 @@ dashboard_bootstrap() {
 }
 dashboard_start() {
   bash "$ROOT_DIR/scripts/fix_permissions.sh"
-  local cmd=(bash -lc "cd '$ROOT_DIR' && source .venv-dashboard/bin/activate && python dashboard/flask_dashboard/app.py")
-  start_bg dashboard "${cmd[@]}"
+  start_bg dashboard bash -lc "cd '$ROOT_DIR' && source '$ROOT_DIR/.venv-dashboard/bin/activate' && python dashboard/flask_dashboard/app.py"
 }
 dashboard_stop() { stop_bg dashboard; }
 dashboard_status() { status_bg dashboard; }
-
+dashboard_logs() { logs_bg dashboard; }
 
 dataplane_bootstrap() {
   bash "$ROOT_DIR/scripts/fix_permissions.sh"
@@ -117,6 +121,28 @@ dataplane_status() {
   echo "[INFO] Dataplane runs interactively via Mininet; no background PID is tracked by default."
 }
 
+stack_bootstrap() {
+  controller_bootstrap
+  dashboard_bootstrap
+}
+stack_start() {
+  controller_start
+  dashboard_start
+  stack_status
+}
+stack_stop() {
+  dashboard_stop || true
+  controller_stop || true
+}
+stack_restart() {
+  stack_stop || true
+  stack_start
+}
+stack_status() {
+  controller_status || true
+  dashboard_status || true
+}
+
 case "$role" in
   fix-perms)
     fix_perms
@@ -128,6 +154,7 @@ case "$role" in
       stop) controller_stop ;;
       restart) controller_stop || true; controller_start ;;
       status) controller_status ;;
+      logs) controller_logs ;;
       *) usage; exit 1 ;;
     esac
     ;;
@@ -138,6 +165,7 @@ case "$role" in
       stop) dashboard_stop ;;
       restart) dashboard_stop || true; dashboard_start ;;
       status) dashboard_status ;;
+      logs) dashboard_logs ;;
       *) usage; exit 1 ;;
     esac
     ;;
@@ -146,6 +174,16 @@ case "$role" in
       bootstrap) dataplane_bootstrap ;;
       start) dataplane_start ;;
       status) dataplane_status ;;
+      *) usage; exit 1 ;;
+    esac
+    ;;
+  stack)
+    case "$action" in
+      bootstrap) stack_bootstrap ;;
+      start) stack_start ;;
+      stop) stack_stop ;;
+      restart) stack_restart ;;
+      status) stack_status ;;
       *) usage; exit 1 ;;
     esac
     ;;
