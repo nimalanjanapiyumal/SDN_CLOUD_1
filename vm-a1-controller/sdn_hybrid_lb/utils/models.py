@@ -54,10 +54,6 @@ class BackendServer:
     current_weight: float = 0.0  # used by smooth weighted RR
     metrics: Metrics = field(default_factory=Metrics)
 
-    def connection_util(self) -> float:
-        cap = max(1, int(self.capacity.max_connections))
-        return min(1.0, float(self.metrics.active_connections) / float(cap))
-
     def as_dict(self) -> Dict:
         return {
             "name": self.name,
@@ -69,7 +65,6 @@ class BackendServer:
             "healthy": self.healthy,
             "weight": self.weight,
             "current_weight": self.current_weight,
-            "connection_util": self.connection_util(),
             "metrics": self.metrics.as_dict(),
         }
 

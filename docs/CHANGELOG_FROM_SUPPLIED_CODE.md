@@ -1,30 +1,19 @@
-# What was completed from the supplied bundle
 
-## Core algorithm and controller
-- Fixed false-overload behavior caused by connection normalization against the current maximum.
-- Added per-backend `max_connections` capacity.
-- Preserved session stickiness for existing flows while still blocking new flows to overloaded backends.
-- Added richer controller status output including connection utilization and eligible backends.
-- Improved Prometheus metric update timestamps.
-- Improved controller launcher so it auto-detects the project virtual environment.
+# Changes made to the supplied code bundle
 
-## OpenStack integration
-- Added reusable OpenStack manager helper using `openstacksdk`.
-- Added VM provisioning script for controller/dataplane lab instances.
-- Added `clouds.yaml` example.
-- Added Horizon deployment guide and operational notes.
+## Dependency and deployment fixes
+- Split controller and dashboard environments so dashboard setup no longer installs Ryu.
+- Added `scripts/install_ryu_patched.sh` to automate the Ryu source patch and install on Python 3.10+.
+- Added three bootstrap scripts for controller, dashboard, and dataplane VMs.
 
-## Dashboard and monitoring
-- Added Flask control dashboard for:
-  - controller status
-  - GA recompute
-  - backend health toggles
-  - OpenStack instance/network visibility
-  - optional OpenStack scale out/in actions
-- Added Prometheus exporter for controller metrics.
-- Added Prometheus scrape config and Grafana dashboard JSON.
+## Controller logic fixes
+- Added `capacity.max_connections` to backend models.
+- Changed overload gating from `active_connections / max_observed_connections` to `active_connections / backend.capacity.max_connections`.
+- Updated controller config to include `max_connections` for backends.
 
-## Project engineering
-- Added root README, docs, tests, scripts, Makefile, and repo-ready structure.
-- Added pytest-based smoke tests.
-- Added Git bundle artifact for VM-side `git clone` without needing GitHub first.
+## Added components
+- Flask operator dashboard.
+- Prometheus example config.
+- Grafana example dashboard JSON.
+- Smoke tests.
+- Direct deployment documentation.

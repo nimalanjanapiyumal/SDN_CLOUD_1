@@ -8,7 +8,6 @@ from typing import Dict, Optional, Sequence
 
 from sdn_hybrid_lb.monitoring.base import MetricsProvider
 from sdn_hybrid_lb.utils.models import BackendServer
-from sdn_hybrid_lb.utils.time import now
 
 
 @dataclass
@@ -20,7 +19,12 @@ class PrometheusConfig:
 
 
 class PrometheusProvider(MetricsProvider):
-    """Pull CPU/memory metrics from Prometheus (optional)."""
+    """Pull CPU/memory metrics from Prometheus (optional).
+
+    You must provide mapping backend_name -> instance label (e.g., "10.0.0.2:9100").
+
+    PromQL templates may reference `{instance}`.
+    """
 
     def __init__(self, cfg: PrometheusConfig) -> None:
         self.cfg = cfg
@@ -42,8 +46,6 @@ class PrometheusProvider(MetricsProvider):
                 b.metrics.cpu_util = float(max(0.0, min(1.0, cpu)))
             if mem is not None:
                 b.metrics.mem_util = float(max(0.0, min(1.0, mem)))
-            if cpu is not None or mem is not None:
-                b.metrics.updated_at = now()
 
     def _query_scalar(self, promql: str) -> Optional[float]:
         url = f"{self.base}/api/v1/query?{urllib.parse.urlencode({'query': promql})}"
@@ -62,6 +64,7 @@ class PrometheusProvider(MetricsProvider):
             if not result:
                 return None
             value = result[0].get("value")
+            # value: [timestamp, "number"]
             if not value or len(value) < 2:
                 return None
             return float(value[1])

@@ -9,6 +9,12 @@ vip:
   ip: "10.0.0.100"
   mac: "00:00:00:00:00:64"
 
+# Backends must include the switch port they are attached to.
+# In the provided Mininet topology, s1 ports are:
+#  1 -> h1 (client)
+#  2 -> h2
+#  3 -> h3
+#  4 -> h4
 backends:
   - name: "srv1"
     ip: "10.0.0.2"
@@ -18,8 +24,8 @@ backends:
     capacity:
       cpu_cores: 2
       mem_gb: 2
-      bw_mbps: 1000
-      max_connections: 200
+      bw_mbps: 100
+      max_connections: 5000
 
   - name: "srv2"
     ip: "10.0.0.3"
@@ -29,8 +35,8 @@ backends:
     capacity:
       cpu_cores: 2
       mem_gb: 2
-      bw_mbps: 1000
-      max_connections: 200
+      bw_mbps: 100
+      max_connections: 5000
 
   - name: "srv3"
     ip: "10.0.0.4"
@@ -40,8 +46,8 @@ backends:
     capacity:
       cpu_cores: 2
       mem_gb: 2
-      bw_mbps: 1000
-      max_connections: 200
+      bw_mbps: 100
+      max_connections: 5000
 
 clients:
   - name: "client1"
@@ -51,17 +57,23 @@ clients:
     port: 1
 
 monitoring:
+  # "ryu_stats" uses OpenFlow port stats; it is always available with Mininet.
   ryu_stats:
     enabled: true
 
+  # Optional: integrate CPU/memory metrics via Prometheus (node_exporter/cadvisor).
   prometheus:
     enabled: false
     base_url: "http://localhost:9090"
     timeout_sec: 2
+    # Example PromQL templates. You must adapt labels to your environment.
+    # Available template vars: {instance}
     promql:
       cpu_util: 'avg(rate(node_cpu_seconds_total{{mode!="idle",instance="{instance}"}}[1m]))'
       mem_util: '(1 - (node_memory_MemAvailable_bytes{{instance="{instance}"}} / node_memory_MemTotal_bytes{{instance="{instance}"}}))'
 
+  # Map backend name -> Prometheus instance label.
+  # Example: srv1: "10.0.0.2:9100"
   instances: {}
 
 hybrid:
@@ -72,7 +84,7 @@ hybrid:
     conn: 0.90
 
   rr:
-    mode: "smooth_weighted"
+    mode: "smooth_weighted"   # "round_robin" or "smooth_weighted"
 
   ga:
     population: 30
@@ -89,8 +101,12 @@ hybrid:
         mem: 0.30
         bw: 0.20
         conn: 0.10
+
+      # GA penalties
       overload_threshold: 0.85
       penalty_overload: 3.0
       penalty_variance: 1.0
+
+      # SLA objective (used as a soft penalty)
       sla_latency_ms: 200
       penalty_sla: 5.0
