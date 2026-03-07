@@ -1,0 +1,9 @@
+# Core
+PyYAML>=6.0
+
+# SDN Controller (Ryu includes OpenFlow + WSGI deps like WebOb)
+ryu>=4.34
+WebOb>=1.8.7
+
+# Testing
+pytest>=7.0
