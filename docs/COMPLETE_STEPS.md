@@ -121,3 +121,8 @@ Set the controller API URL before starting dashboard:
 export CONTROLLER_API_URL=http://<controller-ip>:8080
 bash manage.sh dashboard start
 ```
+
+
+## Compatibility note
+This build no longer depends on `os_ken.cmd.manager` or `os_ken.app.wsgi` at runtime.
+It launches OS-Ken through a local launcher and exposes the controller REST endpoints from a built-in HTTP server.

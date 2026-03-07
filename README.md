@@ -54,3 +54,7 @@ h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 20
 ```
 
 See `docs/COMPLETE_STEPS.md` for the full runbook.
+
+
+### Runtime compatibility change
+The controller now starts through `vm-a1-controller/launcher.py` and serves its REST endpoints from `sdn_hybrid_lb.controller.rest_server`.
