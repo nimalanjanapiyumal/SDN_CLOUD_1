@@ -25,7 +25,7 @@ Ready-to-deploy project package for:
 ## What changed in this ready package
 - Fixed the controller-side overload/stickiness logic by using explicit backend `max_connections` instead of normalizing by current maximum active connections.
 - Split controller, dashboard, and dataplane dependencies so the dashboard venv does **not** try to install Ryu.
-- Added an automated **patched Ryu installer** for Python 3.10+ that avoids the unsupported `--no-use-pep517` flag and falls back to `setup.py install` when needed.
+- Added an automated **patched Ryu installer** for Python 3.10+ that pins a compatible `pip/setuptools/wheel/packaging/pbr` toolchain before installing Ryu.
 - Added ready bootstrap scripts for controller, dataplane, and dashboard VMs.
 
 ## Folder layout
@@ -79,3 +79,7 @@ To start controller + dashboard on the same VM:
 ```bash
 bash start_parallel.sh
 ```
+
+
+## Ryu toolchain note
+The controller bootstrap now pins `setuptools==68.2.2` and `packaging==24.2` before installing Ryu. This avoids the `canonicalize_version(... strip_trailing_zero ...)` failure seen with newer `setuptools` combinations.

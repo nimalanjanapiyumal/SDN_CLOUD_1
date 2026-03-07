@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import importlib
 import sys
+from importlib import metadata
 
 REQUIRED = [
     ("yaml", "PyYAML"),
     ("webob", "WebOb"),
     ("routes", "routes"),
     ("eventlet", "eventlet"),
+    ("greenlet", "greenlet"),
     ("netaddr", "netaddr"),
     ("oslo_config", "oslo.config"),
     ("ovs", "ovs"),
@@ -30,6 +32,11 @@ if missing:
     print("[ERROR] Controller environment is missing required modules:")
     for item in missing:
         print(f"  - {item}")
+    try:
+        print("[INFO] Installed setuptools:", metadata.version('setuptools'))
+        print("[INFO] Installed packaging:", metadata.version('packaging'))
+    except Exception:
+        pass
     print("[HINT] Re-run: bash manage.sh controller bootstrap")
     sys.exit(1)
 
