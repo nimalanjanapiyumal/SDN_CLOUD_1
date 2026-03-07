@@ -20,18 +20,16 @@ from sdn_hybrid_lb.monitoring.prometheus import PrometheusProvider, PrometheusCo
 from sdn_hybrid_lb.controller.rest_server import start_rest_server
 
 
-try:
-    OSKEN_APP_BASE = app_manager.OSKenApp
-except AttributeError:
-    OSKEN_APP_BASE = app_manager.RyuApp
+BaseOSKenApp = getattr(app_manager, "OSKenApp", None) or getattr(app_manager, "RyuApp", None) or object
 
 
-class HybridLoadBalancerRyuApp(OSKEN_APP_BASE):
-    """OS-Ken/Ryu compatible SDN controller app implementing VIP-based hybrid load balancing."""
+class HybridLoadBalancerRyuApp(BaseOSKenApp):
+    """Ryu SDN controller app implementing VIP-based hybrid load balancing."""
 
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        if BaseOSKenApp is not object:
+            super().__init__(*args, **kwargs)
 
         self.logger = setup_logger("sdn_hybrid_lb")
 
