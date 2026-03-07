@@ -1,47 +1,48 @@
-# Complete Steps to Run the Project
+# Complete Steps
 
-## 1. Recommended VM layout
-- **VM-A1 Controller**: SDN controller + optional Flask dashboard
-- **VM-A2 Dataplane**: Mininet + Open vSwitch + backend hosts
-- Optional OpenStack services can be external to these VMs; the dashboard and scaler use `openstacksdk`.
-
-## 2. Copy project to the VM
-Use the **tar.gz** archive on Linux because it preserves shell execute permissions better than zip.
+## 1. Extract the project on each VM
+Use the same project folder name on each VM, for example:
 
 ```bash
-mkdir -p /home/user/SDN_CLOUD_1
+mkdir -p /home/user
 cd /home/user
-# copy or extract the folder here
+unzip sdn_hybrid_openstack_project_complete_professional.zip
+mv sdn_hybrid_openstack_project_complete_professional SDN_CLOUD_1
+cd SDN_CLOUD_1
+bash manage.sh fix-perms
 ```
 
-## 3. Controller VM steps
+On Linux, the `.tar.gz` package preserves executable bits more reliably than `.zip`.
+
+## 2. Controller VM
+
 ```bash
 cd /home/user/SDN_CLOUD_1
-bash manage.sh fix-perms
 bash manage.sh controller bootstrap
 bash manage.sh controller start
 bash manage.sh controller status
 bash manage.sh controller logs
 ```
 
-Expected controller ports:
-- OpenFlow TCP: `6633`
-- REST API: `8080`
+The controller listens on OpenFlow port `6633` and REST API port `8080` by default.
 
-Check:
+## 3. Find the controller IP
+On the controller VM:
+
 ```bash
-ss -lntp | egrep '(:6633|:8080)'
-curl http://127.0.0.1:8080/lb/status
+hostname -I
 ```
 
-## 4. Dashboard steps
-If running on the same VM as the controller:
+or
+
 ```bash
-cd /home/user/SDN_CLOUD_1
-bash start_parallel.sh
+ip route get 1.1.1.1 | awk '{print $7; exit}'
 ```
 
-If running separately:
+Use that IP as `<controller-ip>` on the dataplane and dashboard VM.
+
+## 4. Dashboard VM or same VM
+
 ```bash
 cd /home/user/SDN_CLOUD_1
 bash manage.sh dashboard bootstrap
@@ -51,82 +52,72 @@ bash manage.sh dashboard status
 bash manage.sh dashboard logs
 ```
 
-Open in browser:
-- `http://<dashboard-ip>:5000`
+Open:
 
-## 5. Dataplane VM steps
+```text
+http://<dashboard-vm-ip>:5050
+```
+
+## 5. Start controller and dashboard together on one VM
+
+```bash
+cd /home/user/SDN_CLOUD_1
+bash start_parallel.sh
+```
+
+## 6. Dataplane VM
+
 ```bash
 cd /home/user/SDN_CLOUD_1
 bash manage.sh dataplane bootstrap
 CTRL_IP=<controller-ip> bash manage.sh dataplane start
 ```
 
-Once Mininet starts, test:
+This opens the Mininet CLI.
+
+## 7. Validate the VIP from Mininet
+Inside the Mininet CLI:
+
 ```bash
-pingall
+h1 ping -c 2 10.0.0.100
 h1 curl http://10.0.0.100:8000
-h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 20 --duration 15 --sla-ms 200
-h1 python3 tools/iperf3_benchmark.py --server 10.0.0.100 --parallel 4 --time 15
 ```
 
-## 6. Prometheus and Grafana
-### Prometheus
-Use the included config:
-- `prometheus/prometheus.yml`
+The response should identify the backend serving the request.
 
-### Grafana
-Import:
-- `dashboard/grafana/hybrid_lb_dashboard.json`
+## 8. Run testing and evaluation benchmarks
+Inside the Mininet CLI:
 
-## 7. OpenStack access
-If you want the dashboard or scaler to interact with OpenStack:
-1. Install and configure `clouds.yaml` or `OS_*` environment variables.
-2. Test:
 ```bash
-source /path/to/openrc.sh
-python - <<'PY'
-import openstack
-conn = openstack.connect()
-print([s.name for s in conn.compute.servers()][:5])
-PY
+h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 10 --duration 20 --sla-ms 200 --json /tmp/http_10.json
+h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 20 --duration 20 --sla-ms 200 --json /tmp/http_20.json
+h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 50 --duration 20 --sla-ms 200 --json /tmp/http_50.json
+h1 python3 tools/iperf3_benchmark.py --vip 10.0.0.100 --port 5201 --duration 15 --parallel 4 --json /tmp/iperf_4.json
 ```
 
-## 8. Stop and restart
+Then upload these JSON files on the dashboard's **Testing & Evaluation** page.
+
+## 9. OpenStack integration
+OpenStack is optional for the SDN demo. To enable visibility on the dashboard's OpenStack page, set either:
+
+### Option A: Use `clouds.yaml`
 ```bash
-bash manage.sh controller stop
+export OS_CLOUD=mycloud
+```
+
+### Option B: Export Keystone variables
+```bash
+export OS_AUTH_URL=http://<keystone-host>:5000/v3
+export OS_USERNAME=<username>
+export OS_PASSWORD=<password>
+export OS_PROJECT_NAME=<project>
+export OS_USER_DOMAIN_NAME=Default
+export OS_PROJECT_DOMAIN_NAME=Default
+```
+
+Then restart the dashboard:
+
+```bash
 bash manage.sh dashboard stop
-bash manage.sh stack restart
-```
-
-## 9. Logs
-```bash
-bash manage.sh controller logs
-bash manage.sh dashboard logs
-```
-
-## 10. Most common issues
-### Permission denied
-```bash
-bash manage.sh fix-perms
-```
-
-### Controller environment missing package
-```bash
-bash manage.sh controller bootstrap
-```
-
-### Dashboard cannot reach controller
-Set the controller API URL before starting dashboard:
-```bash
-export CONTROLLER_API_URL=http://<controller-ip>:8080
 bash manage.sh dashboard start
 ```
-
-
-## Compatibility note
-This build no longer depends on `os_ken.cmd.manager` or `os_ken.app.wsgi` at runtime.
-It launches OS-Ken through a local launcher and exposes the controller REST endpoints from a built-in HTTP server.
-
-
-OS-Ken compatibility note:
-- This package now supports both `app_manager.OSKenApp` and older `app_manager.RyuApp` style bases at runtime, so the controller can start across different OS-Ken builds.

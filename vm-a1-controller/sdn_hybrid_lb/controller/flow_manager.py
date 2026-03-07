@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Optional, Dict, Any
 
-from os_ken.lib.packet import packet
-from os_ken.lib.packet import ethernet, arp
-from os_ken.lib.packet import ether_types
+from ryu.lib.packet import packet
+from ryu.lib.packet import ethernet, arp
+from ryu.lib.packet import ether_types
 
 
 class FlowManager:

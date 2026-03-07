@@ -4,7 +4,7 @@ set -euo pipefail
 CONFIG="${CONFIG:-./config.controller.yaml}"
 OFP_PORT="${OFP_PORT:-6633}"
 
-REST_PORT_DEFAULT="$(python - <<'PY'
+REST_PORT_DEFAULT="$(CONFIG="$CONFIG" python3 - <<'PY'
 import os, yaml
 cfg_path = os.environ.get('CONFIG', './config.controller.yaml')
 try:
@@ -18,13 +18,12 @@ PY
 REST_PORT="${REST_PORT:-$REST_PORT_DEFAULT}"
 
 export SDN_HYBRID_LB_CONFIG="$CONFIG"
-export EVENTLET_NO_GREENDNS=yes
-export PYTHONPATH="$(pwd):${PYTHONPATH:-}"
-export OFP_PORT REST_PORT
 
 echo "[Controller] Using config: $SDN_HYBRID_LB_CONFIG"
 echo "[Controller] OpenFlow listen port: $OFP_PORT"
 echo "[Controller] REST API port: $REST_PORT"
 
-controller_python="${PYTHON:-python}"
-"$controller_python" ./launcher.py
+python3 ./launch_ryu_compat.py \
+  --ofp-tcp-listen-port "$OFP_PORT" \
+  --wsapi-port "$REST_PORT" \
+  sdn_hybrid_lb/controller/ryu_app.py
