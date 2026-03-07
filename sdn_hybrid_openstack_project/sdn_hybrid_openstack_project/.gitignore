@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.idea/
+.vscode/
+*.log
+.env
+.DS_Store
+prometheus/data/
+grafana/data/

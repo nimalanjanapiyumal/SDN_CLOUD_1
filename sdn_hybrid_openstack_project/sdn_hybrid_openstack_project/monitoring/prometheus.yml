@@ -1,0 +1,14 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: controller_exporter
+    static_configs:
+      - targets:
+          - 10.10.10.10:9108
+
+  - job_name: node_exporters
+    static_configs:
+      - targets:
+          - 10.10.10.10:9100
+          - 10.10.10.11:9100
