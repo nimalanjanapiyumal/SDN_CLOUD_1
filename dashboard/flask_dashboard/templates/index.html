@@ -1,0 +1,63 @@
+
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SDN Hybrid LB Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
+    code { background: #f6f6f6; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h1>SDN Hybrid LB Dashboard</h1>
+  <p>Controller API: <code>{{ api_url }}</code></p>
+  {% if error %}
+    <div class="card"><strong>Controller error:</strong> {{ error }}</div>
+  {% endif %}
+  <div class="grid">
+    <div class="card">
+      <h2>Controller Status</h2>
+      <form method="post" action="/recompute">
+        <button type="submit">Force GA Recompute</button>
+      </form>
+      <p>Active flows: {{ controller.get('active_flows', 'n/a') }}</p>
+      <pre>{{ controller | tojson(indent=2) }}</pre>
+    </div>
+    <div class="card">
+      <h2>OpenStack Servers</h2>
+      <table>
+        <tr><th>Name</th><th>Status</th></tr>
+        {% for s in servers %}
+        <tr><td>{{ s.name }}</td><td>{{ s.status }}</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+  <div class="card" style="margin-top:20px;">
+    <h2>Backend Health Controls</h2>
+    <table>
+      <tr><th>Backend</th><th>Healthy</th><th>Action</th></tr>
+      {% for b in controller.get('backends', []) %}
+      <tr>
+        <td>{{ b.name }}</td>
+        <td>{{ b.healthy }}</td>
+        <td>
+          <form method="post" action="/backend/{{ b.name }}/health">
+            <select name="healthy">
+              <option value="true">true</option>
+              <option value="false">false</option>
+            </select>
+            <button type="submit">Update</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+</body>
+</html>

@@ -3,6 +3,7 @@
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+bash "$ROOT_DIR/scripts/fix_permissions.sh"
 
 sudo apt-get update
 sudo apt-get install -y python3 python3-venv python3-dev git curl mininet openvswitch-switch iperf3
@@ -13,3 +14,5 @@ python -m pip install -r vm-a2-dataplane/requirements-dataplane.txt
 chmod +x vm-a2-dataplane/run_mininet.sh
 
 echo "[OK] Dataplane environment ready."
+
+find "$ROOT_DIR" -type f -name "*.sh" -exec chmod +x {} +

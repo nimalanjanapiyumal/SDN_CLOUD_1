@@ -1,16 +1,3 @@
-# SDN Hybrid OpenStack Project (Direct Deploy Fixed)
-
-> Important after extracting the archive:
-> ```bash
-> bash manage.sh fix-perms
-> ```
->
-> Then use the single launcher:
-> ```bash
-> bash manage.sh controller bootstrap
-> bash manage.sh controller start
-> ```
-
 
 # SDN Hybrid Load Balancing Framework for OpenStack + Mininet
 
