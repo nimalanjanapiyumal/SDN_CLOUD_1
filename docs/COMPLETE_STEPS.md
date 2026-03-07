@@ -1,59 +1,111 @@
-# Complete Steps to Run
+# Complete Steps
 
-## 1. Controller VM
+## 1. Extract the project on each VM
+Use the same project folder name on each VM, for example:
+
 ```bash
-cd /path/to/SDN_CLOUD_1/vm-a1-controller
-python3 -m venv .venv-controller
-source .venv-controller/bin/activate
-pip install --upgrade pip setuptools wheel
-pip install -r requirements-controller.txt
-export SDN_HYBRID_LB_CONFIG=$(pwd)/config.controller.yaml
-bash run_controller.sh
+mkdir -p /home/user
+cd /home/user
+unzip sdn_hybrid_openstack_project_complete_professional.zip
+mv sdn_hybrid_openstack_project_complete_professional SDN_CLOUD_1
+cd SDN_CLOUD_1
+bash manage.sh fix-perms
 ```
 
-The controller exposes:
-- OpenFlow on port `6633`
-- REST API on port `8080`
+On Linux, the `.tar.gz` package preserves executable bits more reliably than `.zip`.
 
-## 2. Dataplane VM
+## 2. Controller VM
+
 ```bash
-cd /path/to/SDN_CLOUD_1/vm-a2-dataplane
-CTRL_IP=<controller-ip> bash run_mininet.sh
+cd /home/user/SDN_CLOUD_1
+bash manage.sh controller bootstrap
+bash manage.sh controller start
+bash manage.sh controller status
+bash manage.sh controller logs
 ```
 
-Inside Mininet:
+The controller listens on OpenFlow port `6633` and REST API port `8080` by default.
+
+## 3. Find the controller IP
+On the controller VM:
+
+```bash
+hostname -I
+```
+
+or
+
+```bash
+ip route get 1.1.1.1 | awk '{print $7; exit}'
+```
+
+Use that IP as `<controller-ip>` on the dataplane and dashboard VM.
+
+## 4. Dashboard VM or same VM
+
+```bash
+cd /home/user/SDN_CLOUD_1
+bash manage.sh dashboard bootstrap
+export CONTROLLER_API_URL=http://<controller-ip>:8080
+bash manage.sh dashboard start
+bash manage.sh dashboard status
+bash manage.sh dashboard logs
+```
+
+Open:
+
+```text
+http://<dashboard-vm-ip>:5050
+```
+
+## 5. Start controller and dashboard together on one VM
+
+```bash
+cd /home/user/SDN_CLOUD_1
+bash start_parallel.sh
+```
+
+## 6. Dataplane VM
+
+```bash
+cd /home/user/SDN_CLOUD_1
+bash manage.sh dataplane bootstrap
+CTRL_IP=<controller-ip> bash manage.sh dataplane start
+```
+
+This opens the Mininet CLI.
+
+## 7. Validate the VIP from Mininet
+Inside the Mininet CLI:
+
 ```bash
 h1 ping -c 2 10.0.0.100
 h1 curl http://10.0.0.100:8000
 ```
 
-The response should be JSON showing the backend name.
+The response should identify the backend serving the request.
 
-## 3. Dashboard VM
+## 8. Run testing and evaluation benchmarks
+Inside the Mininet CLI:
+
 ```bash
-cd /path/to/SDN_CLOUD_1
-bash scripts/bootstrap_dashboard.sh
-source .venv-dashboard/bin/activate
-export CONTROLLER_API_URL=http://<controller-ip>:8080
-bash dashboard/run_dashboard.sh
+h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 10 --duration 20 --sla-ms 200 --json /tmp/http_10.json
+h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 20 --duration 20 --sla-ms 200 --json /tmp/http_20.json
+h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 50 --duration 20 --sla-ms 200 --json /tmp/http_50.json
+h1 python3 tools/iperf3_benchmark.py --vip 10.0.0.100 --port 5201 --duration 15 --parallel 4 --json /tmp/iperf_4.json
 ```
 
-Open:
-```text
-http://<dashboard-vm-ip>:5050
-```
+Then upload these JSON files on the dashboard's **Testing & Evaluation** page.
 
-## 4. OpenStack visibility
-Choose one method.
+## 9. OpenStack integration
+OpenStack is optional for the SDN demo. To enable visibility on the dashboard's OpenStack page, set either:
 
-### Method A: clouds.yaml
+### Option A: Use `clouds.yaml`
 ```bash
-mkdir -p ~/.config/openstack
-nano ~/.config/openstack/clouds.yaml
 export OS_CLOUD=mycloud
 ```
 
-### Method B: environment variables
+### Option B: Export Keystone variables
 ```bash
 export OS_AUTH_URL=http://<keystone-host>:5000/v3
 export OS_USERNAME=<username>
@@ -63,22 +115,9 @@ export OS_USER_DOMAIN_NAME=Default
 export OS_PROJECT_DOMAIN_NAME=Default
 ```
 
-Then refresh the OpenStack page.
+Then restart the dashboard:
 
-## 5. Testing and Evaluation
-Inside Mininet:
 ```bash
-h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 10 --duration 20 --sla-ms 200 --json /tmp/http_10.json
-h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 20 --duration 20 --sla-ms 200 --json /tmp/http_20.json
-h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 50 --duration 20 --sla-ms 200 --json /tmp/http_50.json
+bash manage.sh dashboard stop
+bash manage.sh dashboard start
 ```
-
-Optional iperf3:
-```bash
-h2 iperf3 -s -p 5201 &
-h3 iperf3 -s -p 5201 &
-h4 iperf3 -s -p 5201 &
-h1 python3 tools/iperf3_benchmark.py --vip 10.0.0.100 --port 5201 --duration 15 --parallel 4 --json /tmp/iperf_4.json
-```
-
-Upload the JSON outputs on the **Testing & Evaluation** page to render graphs.
