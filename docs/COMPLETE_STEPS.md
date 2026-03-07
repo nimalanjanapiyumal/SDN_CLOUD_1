@@ -126,3 +126,7 @@ bash manage.sh dashboard start
 ## Compatibility note
 This build no longer depends on `os_ken.cmd.manager` or `os_ken.app.wsgi` at runtime.
 It launches OS-Ken through a local launcher and exposes the controller REST endpoints from a built-in HTTP server.
+
+
+OS-Ken compatibility note:
+- This package now supports both `app_manager.OSKenApp` and older `app_manager.RyuApp` style bases at runtime, so the controller can start across different OS-Ken builds.
