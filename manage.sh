@@ -86,7 +86,11 @@ controller_bootstrap() {
 }
 controller_start() {
   bash "$ROOT_DIR/scripts/fix_permissions.sh"
-  start_bg controller bash -lc "cd '$ROOT_DIR/vm-a1-controller' && source '$ROOT_DIR/.venv-controller/bin/activate' && bash ./run_controller.sh"
+  if [ ! -f "$ROOT_DIR/.venv-controller/bin/activate" ]; then
+    echo "[ERROR] .venv-controller not found. Run: bash manage.sh controller bootstrap" >&2
+    exit 1
+  fi
+  start_bg controller bash -lc "cd '$ROOT_DIR/vm-a1-controller' && source '$ROOT_DIR/.venv-controller/bin/activate' && python '$ROOT_DIR/scripts/check_controller_env.py' && bash ./run_controller.sh"
 }
 controller_stop() { stop_bg controller; }
 controller_status() { status_bg controller; }

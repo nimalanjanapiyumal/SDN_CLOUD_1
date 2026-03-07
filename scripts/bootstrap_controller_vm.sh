@@ -15,6 +15,7 @@ source .venv-controller/bin/activate
 python -m pip install --upgrade pip wheel setuptools
 python -m pip install -r vm-a1-controller/requirements-controller.txt
 bash scripts/install_ryu_patched.sh .venv-controller
+python scripts/check_controller_env.py
 chmod +x vm-a1-controller/run_controller.sh
 
 echo "[OK] Controller environment ready."

@@ -44,6 +44,14 @@ else:
     print('[INFO] hooks.py already patched or line not present')
 PY2
 
+echo "[INFO] Installing any bundled Ryu dependency files first..."
+for req in "$SRC/requirements.txt" "$SRC/tools/pip-requires" "$SRC/tools/optional-requires"; do
+  if [[ -f "$req" ]]; then
+    echo "[INFO] Installing dependencies from: $req"
+    python -m pip install -r "$req" || true
+  fi
+done
+
 echo "[INFO] Installing patched Ryu..."
 if python -m pip install --no-build-isolation "$SRC"; then
   echo "[OK] Ryu installed via pip local source"

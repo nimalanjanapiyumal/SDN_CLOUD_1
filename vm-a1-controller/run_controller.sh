@@ -26,6 +26,9 @@ REST_PORT="${REST_PORT:-$REST_PORT_DEFAULT}"
 
 export SDN_HYBRID_LB_CONFIG="$CONFIG"
 
+
+python "$ROOT_DIR/scripts/check_controller_env.py"
+
 echo "[Controller] Using config: $SDN_HYBRID_LB_CONFIG"
 echo "[Controller] OpenFlow listen port: $OFP_PORT"
 echo "[Controller] REST API port: $REST_PORT"
