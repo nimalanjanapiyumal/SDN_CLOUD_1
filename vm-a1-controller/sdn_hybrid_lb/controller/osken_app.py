@@ -11,22 +11,25 @@ from os_ken.lib.packet import packet
 from os_ken.lib.packet import ethernet, arp, ipv4, tcp, udp
 from os_ken.lib.packet import ether_types
 from os_ken.ofproto import ofproto_v1_3
-from os_ken.app.wsgi import WSGIApplication
 
 from sdn_hybrid_lb.utils.config import load_config
 from sdn_hybrid_lb.utils.logging import setup_logger
 from sdn_hybrid_lb.algorithms.hybrid import HybridLoadBalancer, FlowKey
 from sdn_hybrid_lb.controller.flow_manager import FlowManager
-from sdn_hybrid_lb.controller.rest_api import LBRestController
 from sdn_hybrid_lb.monitoring.prometheus import PrometheusProvider, PrometheusConfig
+from sdn_hybrid_lb.controller.rest_server import start_rest_server
 
 
-class HybridLoadBalancerRyuApp(app_manager.RyuApp):
-    """Ryu SDN controller app implementing VIP-based hybrid load balancing."""
+try:
+    OSKEN_APP_BASE = app_manager.OSKenApp
+except AttributeError:
+    OSKEN_APP_BASE = app_manager.RyuApp
+
+
+class HybridLoadBalancerRyuApp(OSKEN_APP_BASE):
+    """OS-Ken/Ryu compatible SDN controller app implementing VIP-based hybrid load balancing."""
 
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
-    _CONTEXTS = {"wsgi": WSGIApplication}
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -56,11 +59,13 @@ class HybridLoadBalancerRyuApp(app_manager.RyuApp):
             )
             self.logger.info("Prometheus provider enabled: %s", self.cfg.monitoring.prometheus.base_url)
 
-        # REST API registration
-        wsgi = kwargs.get("wsgi")
-        if wsgi:
-            wsgi.register(LBRestController, {"app": self})
-            self.logger.info("REST API registered on port %s", self.cfg.controller.rest_api_port)
+        # Standalone REST API thread (newer OS-Ken releases no longer bundle the old WSGI stack)
+        self._rest_server = None
+        try:
+            self._rest_server = start_rest_server(self, host="0.0.0.0", port=self.cfg.controller.rest_api_port)
+            self.logger.info("REST API started on port %s", self.cfg.controller.rest_api_port)
+        except Exception as e:
+            self.logger.exception("Failed to start REST API server: %s", e)
 
         # Monitoring thread
         self._monitor_thread = hub.spawn(self._monitor)
