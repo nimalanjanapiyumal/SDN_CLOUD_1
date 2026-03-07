@@ -1,210 +1,169 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="$ROOT_DIR/logs"
-mkdir -p "$LOG_DIR"
+PID_DIR="$ROOT_DIR/run"
+mkdir -p "$LOG_DIR" "$PID_DIR"
 
-fix_perms() {
-  find "$ROOT_DIR" -type f \( -name "*.sh" -o -name "manage.sh" \) -exec chmod +x {} +
-  echo "[OK] Shell script permissions repaired under: $ROOT_DIR"
-}
+role="${1:-}"
+action="${2:-}"
 
-ensure_venv() {
-  local venv_dir="$1"
-  if [[ ! -d "$venv_dir" ]]; then
-    echo "[ERROR] Missing virtual environment: $venv_dir"
-    echo "Run bootstrap first."
-    exit 1
-  fi
-}
-
-stop_by_pidfile() {
-  local name="$1"
-  local pidfile="$LOG_DIR/${name}.pid"
-  if [[ -f "$pidfile" ]]; then
-    local pid
-    pid="$(cat "$pidfile" 2>/dev/null || true)"
-    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-      kill "$pid" 2>/dev/null || true
-      sleep 1
-      if kill -0 "$pid" 2>/dev/null; then
-        kill -9 "$pid" 2>/dev/null || true
-      fi
-      echo "[OK] Stopped $name (PID $pid)"
-    else
-      echo "[INFO] $name was not running"
-    fi
-    rm -f "$pidfile"
-  else
-    echo "[INFO] No PID file for $name"
-  fi
-}
-
-status_by_pidfile() {
-  local name="$1"
-  local pidfile="$LOG_DIR/${name}.pid"
-  if [[ -f "$pidfile" ]]; then
-    local pid
-    pid="$(cat "$pidfile" 2>/dev/null || true)"
-    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-      echo "[OK] $name running (PID $pid)"
-      return 0
-    fi
-  fi
-  echo "[INFO] $name not running"
-  return 1
-}
-
-controller_bootstrap() {
-  fix_perms
-  cd "$ROOT_DIR"
-  python3 -m venv .venv-controller
-  # shellcheck disable=SC1091
-  source .venv-controller/bin/activate
-  python -m pip install --upgrade pip setuptools wheel
-  python -m pip install -r vm-a1-controller/requirements-controller.txt
-  python - <<'PY'
-import importlib
-mods = ['yaml', 'ryu']
-for m in mods:
-    importlib.import_module(m)
-print('[OK] Controller Python dependencies verified.')
-PY
-  echo "[OK] Controller environment ready."
-}
-
-controller_start() {
-  fix_perms
-  cd "$ROOT_DIR/vm-a1-controller"
-  ensure_venv "$ROOT_DIR/.venv-controller"
-  stop_by_pidfile controller >/dev/null 2>&1 || true
-  # shellcheck disable=SC1091
-  source "$ROOT_DIR/.venv-controller/bin/activate"
-  nohup bash ./run_controller.sh > "$ROOT_DIR/logs/controller.log" 2>&1 &
-  echo $! > "$ROOT_DIR/logs/controller.pid"
-  sleep 3
-  if kill -0 "$(cat "$ROOT_DIR/logs/controller.pid")" 2>/dev/null; then
-    echo "[OK] Started controller (PID $(cat "$ROOT_DIR/logs/controller.pid"))"
-    echo "[LOG] tail -f $ROOT_DIR/logs/controller.log"
-  else
-    echo "[ERROR] controller failed to stay running. Last log lines:"
-    tail -n 40 "$ROOT_DIR/logs/controller.log" || true
-    exit 1
-  fi
-}
-
-controller_logs() {
-  tail -n 120 "$ROOT_DIR/logs/controller.log"
-}
-
-
-dashboard_bootstrap() {
-  fix_perms
-  cd "$ROOT_DIR"
-  python3 -m venv .venv-dashboard
-  # shellcheck disable=SC1091
-  source .venv-dashboard/bin/activate
-  python -m pip install --upgrade pip setuptools wheel
-  python -m pip install -r dashboard/requirements-dashboard.txt
-  python - <<'PY'
-import importlib
-mods = ['flask', 'requests', 'openstack', 'yaml']
-for m in mods:
-    importlib.import_module(m)
-print('[OK] Dashboard Python dependencies verified.')
-PY
-  echo "[OK] Dashboard environment ready."
-}
-
-dashboard_start() {
-  fix_perms
-  cd "$ROOT_DIR/dashboard"
-  ensure_venv "$ROOT_DIR/.venv-dashboard"
-  stop_by_pidfile dashboard >/dev/null 2>&1 || true
-  # shellcheck disable=SC1091
-  source "$ROOT_DIR/.venv-dashboard/bin/activate"
-  export CONTROLLER_API_URL="${CONTROLLER_API_URL:-http://127.0.0.1:8080}"
-  export DASHBOARD_HOST="${DASHBOARD_HOST:-0.0.0.0}"
-  export DASHBOARD_PORT="${DASHBOARD_PORT:-5050}"
-  nohup bash ./run_dashboard.sh > "$ROOT_DIR/logs/dashboard.log" 2>&1 &
-  echo $! > "$ROOT_DIR/logs/dashboard.pid"
-  sleep 3
-  if kill -0 "$(cat "$ROOT_DIR/logs/dashboard.pid")" 2>/dev/null; then
-    echo "[OK] Started dashboard (PID $(cat "$ROOT_DIR/logs/dashboard.pid"))"
-    echo "[INFO] Dashboard URL: http://$(hostname -I | awk '{print $1}'):${DASHBOARD_PORT}"
-  else
-    echo "[ERROR] dashboard failed to stay running. Last log lines:"
-    tail -n 40 "$ROOT_DIR/logs/dashboard.log" || true
-    exit 1
-  fi
-}
-
-dashboard_logs() {
-  tail -n 120 "$ROOT_DIR/logs/dashboard.log"
-}
-
-dataplane_bootstrap() {
-  fix_perms
-  if command -v apt-get >/dev/null 2>&1; then
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update -y
-    apt-get install -y mininet openvswitch-switch iperf3 curl python3-pip python3-venv >/dev/null
-    echo "[OK] Dataplane packages installed."
-  else
-    echo "[WARN] apt-get not found; install Mininet, Open vSwitch, and iperf3 manually."
-  fi
-}
-
-dataplane_start() {
-  fix_perms
-  cd "$ROOT_DIR/vm-a2-dataplane"
-  export CTRL_IP="${CTRL_IP:-192.168.56.10}"
-  export CTRL_PORT="${CTRL_PORT:-6633}"
-  export SERVERS="${SERVERS:-3}"
-  echo "[INFO] Starting Mininet in foreground. Use CTRL_IP=<controller-ip> bash manage.sh dataplane start"
-  bash ./run_mininet.sh
-}
-
-case "${1:-}" in
-  fix-perms)
-    fix_perms
-    ;;
-  controller)
-    case "${2:-}" in
-      bootstrap) controller_bootstrap ;;
-      start) controller_start ;;
-      stop) stop_by_pidfile controller ;;
-      status) status_by_pidfile controller ;;
-      logs) controller_logs ;;
-      *) echo "Usage: bash manage.sh controller {bootstrap|start|stop|status|logs}"; exit 1 ;;
-    esac
-    ;;
-  dashboard)
-    case "${2:-}" in
-      bootstrap) dashboard_bootstrap ;;
-      start) dashboard_start ;;
-      stop) stop_by_pidfile dashboard ;;
-      status) status_by_pidfile dashboard ;;
-      logs) dashboard_logs ;;
-      *) echo "Usage: bash manage.sh dashboard {bootstrap|start|stop|status|logs}"; exit 1 ;;
-    esac
-    ;;
-  dataplane)
-    case "${2:-}" in
-      bootstrap) dataplane_bootstrap ;;
-      start) dataplane_start ;;
-      *) echo "Usage: bash manage.sh dataplane {bootstrap|start}"; exit 1 ;;
-    esac
-    ;;
-  *)
-    cat <<USAGE
+usage() {
+  cat <<USAGE
 Usage:
   bash manage.sh fix-perms
-  bash manage.sh controller {bootstrap|start|stop|status|logs}
-  bash manage.sh dashboard {bootstrap|start|stop|status|logs}
-  bash manage.sh dataplane {bootstrap|start}
+  bash manage.sh controller bootstrap|start|stop|restart|status|logs
+  bash manage.sh dashboard  bootstrap|start|stop|restart|status|logs
+  bash manage.sh dataplane  bootstrap|start|status
+  bash manage.sh stack      bootstrap|start|stop|restart|status
 USAGE
+}
+
+fix_perms() { bash "$ROOT_DIR/scripts/fix_permissions.sh"; }
+
+start_bg() {
+  local name="$1"; shift
+  local pidfile="$PID_DIR/${name}.pid"
+  local logfile="$LOG_DIR/${name}.log"
+  if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+    echo "[INFO] $name already running with PID $(cat "$pidfile")"
+    exit 0
+  fi
+  nohup "$@" >"$logfile" 2>&1 &
+  local pid=$!
+  echo "$pid" > "$pidfile"
+  sleep 4
+  if kill -0 "$pid" 2>/dev/null; then
+    echo "[OK] Started $name (PID $pid)"
+    echo "[LOG] tail -f $logfile"
+  else
+    echo "[ERROR] $name failed to stay running. Last log lines:"
+    tail -n 60 "$logfile" || true
+    rm -f "$pidfile"
     exit 1
-    ;;
+  fi
+}
+
+stop_bg() {
+  local name="$1"
+  local pidfile="$PID_DIR/${name}.pid"
+  if [ ! -f "$pidfile" ]; then
+    echo "[INFO] $name is not running"
+    exit 0
+  fi
+  local pid="$(cat "$pidfile")"
+  if kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" || true
+    echo "[OK] Stopped $name (PID $pid)"
+  else
+    echo "[INFO] $name PID file existed but process was not running"
+  fi
+  rm -f "$pidfile"
+}
+
+status_bg() {
+  local name="$1"
+  local pidfile="$PID_DIR/${name}.pid"
+  if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+    echo "[OK] $name running with PID $(cat "$pidfile")"
+  else
+    echo "[INFO] $name not running"
+    return 1
+  fi
+}
+
+logs_bg() { local name="$1"; tail -n 120 "$LOG_DIR/${name}.log"; }
+
+controller_bootstrap() {
+  bash "$ROOT_DIR/scripts/fix_permissions.sh"
+  bash "$ROOT_DIR/scripts/bootstrap_controller_vm.sh"
+}
+controller_start() {
+  bash "$ROOT_DIR/scripts/fix_permissions.sh"
+  if [ ! -f "$ROOT_DIR/.venv-controller/bin/activate" ]; then
+    echo "[ERROR] .venv-controller not found. Run: bash manage.sh controller bootstrap" >&2
+    exit 1
+  fi
+  start_bg controller bash -lc "cd '$ROOT_DIR/vm-a1-controller' && source '$ROOT_DIR/.venv-controller/bin/activate' && python '$ROOT_DIR/scripts/check_controller_env.py' && bash ./run_controller.sh"
+}
+controller_stop() { stop_bg controller; }
+controller_status() { status_bg controller; }
+controller_logs() { logs_bg controller; }
+
+dashboard_bootstrap() {
+  bash "$ROOT_DIR/scripts/fix_permissions.sh"
+  bash "$ROOT_DIR/scripts/bootstrap_dashboard_vm.sh"
+}
+dashboard_start() {
+  bash "$ROOT_DIR/scripts/fix_permissions.sh"
+  if [ ! -f "$ROOT_DIR/.venv-dashboard/bin/activate" ]; then
+    echo "[ERROR] .venv-dashboard not found. Run: bash manage.sh dashboard bootstrap" >&2
+    exit 1
+  fi
+  start_bg dashboard bash -lc "cd '$ROOT_DIR' && source '$ROOT_DIR/.venv-dashboard/bin/activate' && python dashboard/flask_dashboard/app.py"
+}
+dashboard_stop() { stop_bg dashboard; }
+dashboard_status() { status_bg dashboard; }
+dashboard_logs() { logs_bg dashboard; }
+
+dataplane_bootstrap() {
+  bash "$ROOT_DIR/scripts/fix_permissions.sh"
+  bash "$ROOT_DIR/scripts/bootstrap_dataplane_vm.sh"
+}
+dataplane_start() {
+  bash "$ROOT_DIR/scripts/fix_permissions.sh"
+  if [ -z "${CTRL_IP:-}" ]; then
+    echo "[ERROR] Set CTRL_IP before starting dataplane, e.g. CTRL_IP=10.0.0.11 bash manage.sh dataplane start" >&2
+    exit 1
+  fi
+  cd "$ROOT_DIR/vm-a2-dataplane"
+  CTRL_IP="$CTRL_IP" bash ./run_mininet.sh
+}
+dataplane_status() { echo "[INFO] Dataplane runs interactively via Mininet; no background PID is tracked by default."; }
+
+stack_bootstrap() { controller_bootstrap; dashboard_bootstrap; }
+stack_start() { controller_start; dashboard_start; stack_status; }
+stack_stop() { dashboard_stop || true; controller_stop || true; }
+stack_restart() { stack_stop || true; stack_start; }
+stack_status() { controller_status || true; dashboard_status || true; }
+
+case "$role" in
+  fix-perms) fix_perms ;;
+  controller)
+    case "$action" in
+      bootstrap) controller_bootstrap ;;
+      start) controller_start ;;
+      stop) controller_stop ;;
+      restart) controller_stop || true; controller_start ;;
+      status) controller_status ;;
+      logs) controller_logs ;;
+      *) usage; exit 1 ;;
+    esac ;;
+  dashboard)
+    case "$action" in
+      bootstrap) dashboard_bootstrap ;;
+      start) dashboard_start ;;
+      stop) dashboard_stop ;;
+      restart) dashboard_stop || true; dashboard_start ;;
+      status) dashboard_status ;;
+      logs) dashboard_logs ;;
+      *) usage; exit 1 ;;
+    esac ;;
+  dataplane)
+    case "$action" in
+      bootstrap) dataplane_bootstrap ;;
+      start) dataplane_start ;;
+      status) dataplane_status ;;
+      *) usage; exit 1 ;;
+    esac ;;
+  stack)
+    case "$action" in
+      bootstrap) stack_bootstrap ;;
+      start) stack_start ;;
+      stop) stack_stop ;;
+      restart) stack_restart ;;
+      status) stack_status ;;
+      *) usage; exit 1 ;;
+    esac ;;
+  *) usage; exit 1 ;;
 esac

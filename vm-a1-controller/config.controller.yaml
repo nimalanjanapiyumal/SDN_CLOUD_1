@@ -24,7 +24,8 @@ backends:
     capacity:
       cpu_cores: 2
       mem_gb: 2
-      bw_mbps: 1000
+      bw_mbps: 100
+      max_connections: 5000
 
   - name: "srv2"
     ip: "10.0.0.3"
@@ -34,7 +35,8 @@ backends:
     capacity:
       cpu_cores: 2
       mem_gb: 2
-      bw_mbps: 1000
+      bw_mbps: 100
+      max_connections: 5000
 
   - name: "srv3"
     ip: "10.0.0.4"
@@ -44,7 +46,8 @@ backends:
     capacity:
       cpu_cores: 2
       mem_gb: 2
-      bw_mbps: 1000
+      bw_mbps: 100
+      max_connections: 5000
 
 clients:
   - name: "client1"
