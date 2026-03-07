@@ -1,0 +1,14 @@
+{
+  "title": "Hybrid LB Overview",
+  "panels": [
+    {
+      "type": "text",
+      "title": "Usage",
+      "options": {
+        "content": "Use the controller REST API and Prometheus metrics to build panels for CPU, memory, flows, and throughput."
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1
+}
