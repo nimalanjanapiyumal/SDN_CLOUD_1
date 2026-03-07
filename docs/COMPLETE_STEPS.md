@@ -1,132 +1,77 @@
-# Complete Steps to Run the Project
+# Complete steps to run the project
 
-## 1. Recommended VM layout
-- **VM-A1 Controller**: SDN controller + optional Flask dashboard
-- **VM-A2 Dataplane**: Mininet + Open vSwitch + backend hosts
-- Optional OpenStack services can be external to these VMs; the dashboard and scaler use `openstacksdk`.
+## 1. Controller VM
 
-## 2. Copy project to the VM
-Use the **tar.gz** archive on Linux because it preserves shell execute permissions better than zip.
-
-```bash
-mkdir -p /home/user/SDN_CLOUD_1
-cd /home/user
-# copy or extract the folder here
-```
-
-## 3. Controller VM steps
 ```bash
 cd /home/user/SDN_CLOUD_1
 bash manage.sh fix-perms
 bash manage.sh controller bootstrap
 bash manage.sh controller start
-bash manage.sh controller status
 bash manage.sh controller logs
 ```
 
-Expected controller ports:
-- OpenFlow TCP: `6633`
-- REST API: `8080`
+Find the controller IP:
 
-Check:
 ```bash
-ss -lntp | egrep '(:6633|:8080)'
-curl http://127.0.0.1:8080/lb/status
+ip route get 1.1.1.1 | awk '{print $7; exit}'
 ```
 
-## 4. Dashboard steps
-If running on the same VM as the controller:
-```bash
-cd /home/user/SDN_CLOUD_1
-bash start_parallel.sh
-```
+## 2. Dashboard VM or same VM
 
-If running separately:
 ```bash
 cd /home/user/SDN_CLOUD_1
 bash manage.sh dashboard bootstrap
 export CONTROLLER_API_URL=http://<controller-ip>:8080
+```
+
+If you want OpenStack visibility, use either `OS_CLOUD` or the Keystone environment variables described in `docs/OPENSTACK_QUICK_CONFIG.md`.
+
+Then start:
+
+```bash
 bash manage.sh dashboard start
-bash manage.sh dashboard status
 bash manage.sh dashboard logs
 ```
 
-Open in browser:
-- `http://<dashboard-ip>:5000`
+Open the dashboard in the browser on port 5000.
 
-## 5. Dataplane VM steps
+## 3. Dataplane VM
+
 ```bash
 cd /home/user/SDN_CLOUD_1
 bash manage.sh dataplane bootstrap
 CTRL_IP=<controller-ip> bash manage.sh dataplane start
 ```
 
-Once Mininet starts, test:
+## 4. Mininet validation
+
+Inside the Mininet CLI, run:
+
 ```bash
-pingall
+h1 ping -c 2 10.0.0.100
 h1 curl http://10.0.0.100:8000
-h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 20 --duration 15 --sla-ms 200
-h1 python3 tools/iperf3_benchmark.py --server 10.0.0.100 --parallel 4 --time 15
 ```
 
-## 6. Prometheus and Grafana
-### Prometheus
-Use the included config:
-- `prometheus/prometheus.yml`
+The reply should be JSON from one of the backend hosts.
 
-### Grafana
-Import:
-- `dashboard/grafana/hybrid_lb_dashboard.json`
+## 5. Testing and metrics
 
-## 7. OpenStack access
-If you want the dashboard or scaler to interact with OpenStack:
-1. Install and configure `clouds.yaml` or `OS_*` environment variables.
-2. Test:
+HTTP benchmark:
+
 ```bash
-source /path/to/openrc.sh
-python - <<'PY'
-import openstack
-conn = openstack.connect()
-print([s.name for s in conn.compute.servers()][:5])
-PY
+h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 20 --duration 20 --sla-ms 200 --json /tmp/http_20.json
 ```
 
-## 8. Stop and restart
+iperf3 benchmark:
+
 ```bash
-bash manage.sh controller stop
-bash manage.sh dashboard stop
-bash manage.sh stack restart
+h1 python3 tools/iperf3_benchmark.py --vip 10.0.0.100 --port 5201 --duration 15 --parallel 4 --json /tmp/iperf.json
 ```
 
-## 9. Logs
+Fault-tolerance test:
+
 ```bash
-bash manage.sh controller logs
-bash manage.sh dashboard logs
+curl -X POST http://127.0.0.1:8080/lb/health/srv1 -H 'Content-Type: application/json' -d '{"healthy": false}'
 ```
 
-## 10. Most common issues
-### Permission denied
-```bash
-bash manage.sh fix-perms
-```
-
-### Controller environment missing package
-```bash
-bash manage.sh controller bootstrap
-```
-
-### Dashboard cannot reach controller
-Set the controller API URL before starting dashboard:
-```bash
-export CONTROLLER_API_URL=http://<controller-ip>:8080
-bash manage.sh dashboard start
-```
-
-
-## Compatibility note
-This build no longer depends on `os_ken.cmd.manager` or `os_ken.app.wsgi` at runtime.
-It launches OS-Ken through a local launcher and exposes the controller REST endpoints from a built-in HTTP server.
-
-
-OS-Ken compatibility note:
-- This package now supports both `app_manager.OSKenApp` and older `app_manager.RyuApp` style bases at runtime, so the controller can start across different OS-Ken builds.
+Then rerun the HTTP benchmark and compare throughput, p95 latency, and SLA compliance.

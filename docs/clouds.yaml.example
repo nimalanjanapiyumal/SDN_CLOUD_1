@@ -1,10 +1,11 @@
 clouds:
-  openstack:
+  mycloud:
+    auth_type: password
     auth:
-      auth_url: https://your-openstack-endpoint:5000/v3
-      username: your-username
-      password: your-password
-      project_name: your-project
+      auth_url: http://OPENSTACK_CONTROLLER:5000/v3
+      username: demo
+      password: change_me
+      project_name: demo
       user_domain_name: Default
       project_domain_name: Default
     region_name: RegionOne

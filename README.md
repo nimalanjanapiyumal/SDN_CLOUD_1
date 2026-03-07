@@ -1,60 +1,59 @@
-# SDN-Based Adaptive Cloud Network Management Framework (Fresh Deployable Package)
+# SDN Hybrid OpenStack Project - Visual and Evaluation Update
 
-This package is a fresh deployable version of your project for:
-- OpenStack-based cloud testbed
-- SDN control plane with a hybrid Round Robin + Genetic Algorithm load balancer
-- Prometheus/Grafana monitoring
-- Flask operator dashboard
-- Mininet dataplane emulation
+This version improves three areas:
 
-## Important implementation note
-The original project used Ryu. This package runs the controller on **OS-Ken**, which is the OpenStack-maintained fork of Ryu and keeps the same overall controller model for this project. This avoids the repeated Ryu packaging failures on Python 3.10.
+1. A clearer Flask dashboard with backend health cards, utilization bars, OpenStack status, and a testing matrix.
+2. Better OpenStack handling so missing Keystone credentials show as `not configured` instead of a vague crash.
+3. Stronger testing support for section 3.1.5, including JSON backend responses, HTTP benchmark JSON output, iperf3 JSON output, and a dedicated testing guide.
 
-## Folder layout
-- `vm-a1-controller/` controller code, config, runner
-- `vm-a2-dataplane/` Mininet topology and test tools
-- `dashboard/` Flask dashboard and Grafana JSON
-- `scripts/` bootstrap and helper scripts
-- `prometheus/` Prometheus scrape config
-- `docs/` complete run steps
-- `manage.sh` one-command launcher per role
-- `start_parallel.sh` bootstrap+start controller and dashboard on the same VM
+## Key reminder
 
-## Fastest path
+The VIP `10.0.0.100:8000` lives inside the **Mininet network**. Test it from **h1 inside the Mininet CLI**, not from the controller VM shell.
+
+## Quick start
+
 ### Controller VM
+
 ```bash
 cd /home/user/SDN_CLOUD_1
 bash manage.sh fix-perms
 bash manage.sh controller bootstrap
 bash manage.sh controller start
-bash manage.sh controller status
 bash manage.sh controller logs
 ```
 
-### Dashboard VM (or same VM)
+### Dashboard VM or same VM
+
 ```bash
 cd /home/user/SDN_CLOUD_1
 bash manage.sh dashboard bootstrap
 export CONTROLLER_API_URL=http://<controller-ip>:8080
+# optional for OpenStack visibility:
+# export OS_CLOUD=mycloud
+# or export OS_AUTH_URL / OS_USERNAME / OS_PASSWORD / OS_PROJECT_NAME / OS_USER_DOMAIN_NAME / OS_PROJECT_DOMAIN_NAME
 bash manage.sh dashboard start
 bash manage.sh dashboard logs
 ```
 
 ### Dataplane VM
+
 ```bash
 cd /home/user/SDN_CLOUD_1
 bash manage.sh dataplane bootstrap
 CTRL_IP=<controller-ip> bash manage.sh dataplane start
 ```
 
-Then inside Mininet:
+Inside Mininet:
+
 ```bash
+h1 ping -c 2 10.0.0.100
 h1 curl http://10.0.0.100:8000
-h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 20 --duration 15 --sla-ms 200
+h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 20 --duration 20 --sla-ms 200 --json /tmp/http_20.json
+h1 python3 tools/iperf3_benchmark.py --vip 10.0.0.100 --port 5201 --duration 15 --parallel 4 --json /tmp/iperf.json
 ```
 
-See `docs/COMPLETE_STEPS.md` for the full runbook.
+## Important docs
 
-
-### Runtime compatibility change
-The controller now starts through `vm-a1-controller/launcher.py` and serves its REST endpoints from `sdn_hybrid_lb.controller.rest_server`.
+- `docs/COMPLETE_STEPS.md`
+- `docs/TESTING_EVALUATION.md`
+- `docs/OPENSTACK_QUICK_CONFIG.md`
