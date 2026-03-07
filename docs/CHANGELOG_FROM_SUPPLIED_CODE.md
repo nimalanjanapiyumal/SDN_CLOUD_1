@@ -1,19 +1,11 @@
+# Fresh Package Change Log
 
-# Changes made to the supplied code bundle
-
-## Dependency and deployment fixes
-- Split controller and dashboard environments so dashboard setup no longer installs Ryu.
-- Added `scripts/install_ryu_patched.sh` to automate the Ryu source patch and install on Python 3.10+.
-- Added three bootstrap scripts for controller, dashboard, and dataplane VMs.
-
-## Controller logic fixes
-- Added `capacity.max_connections` to backend models.
-- Changed overload gating from `active_connections / max_observed_connections` to `active_connections / backend.capacity.max_connections`.
-- Updated controller config to include `max_connections` for backends.
-
-## Added components
-- Flask operator dashboard.
-- Prometheus example config.
-- Grafana example dashboard JSON.
-- Smoke tests.
-- Direct deployment documentation.
+## What changed from the supplied code
+- Kept the original hybrid RR + GA logic and controller structure.
+- Preserved the `max_connections`-aware overload fix for backend eligibility.
+- Rebuilt the deployment wrapper scripts from scratch.
+- Replaced the fragile Ryu installation path with an OS-Ken based controller runtime.
+- Added a clean `manage.sh` launcher for controller, dashboard, dataplane, and combined stack operations.
+- Added `start_parallel.sh` to bootstrap and start controller + dashboard together on one host.
+- Added complete run steps in `docs/COMPLETE_STEPS.md`.
+- Retained Flask dashboard, Prometheus config, Grafana dashboard, and OpenStack helper modules.

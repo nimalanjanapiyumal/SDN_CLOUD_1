@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict
 
-from ryu.app.wsgi import ControllerBase, route
+from os_ken.app.wsgi import ControllerBase, route
 from webob import Response
 
 

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="$ROOT_DIR/logs"
 PID_DIR="$ROOT_DIR/run"
@@ -23,10 +22,9 @@ USAGE
 fix_perms() { bash "$ROOT_DIR/scripts/fix_permissions.sh"; }
 
 start_bg() {
-  local name="$1"
+  local name="$1"; shift
   local pidfile="$PID_DIR/${name}.pid"
   local logfile="$LOG_DIR/${name}.log"
-  shift
   if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
     echo "[INFO] $name already running with PID $(cat "$pidfile")"
     exit 0
@@ -34,13 +32,13 @@ start_bg() {
   nohup "$@" >"$logfile" 2>&1 &
   local pid=$!
   echo "$pid" > "$pidfile"
-  sleep 3
+  sleep 4
   if kill -0 "$pid" 2>/dev/null; then
     echo "[OK] Started $name (PID $pid)"
     echo "[LOG] tail -f $logfile"
   else
     echo "[ERROR] $name failed to stay running. Last log lines:"
-    tail -n 40 "$logfile" || true
+    tail -n 60 "$logfile" || true
     rm -f "$pidfile"
     exit 1
   fi
@@ -53,10 +51,9 @@ stop_bg() {
     echo "[INFO] $name is not running"
     exit 0
   fi
-  local pid
-  pid="$(cat "$pidfile")"
+  local pid="$(cat "$pidfile")"
   if kill -0 "$pid" 2>/dev/null; then
-    kill "$pid"
+    kill "$pid" || true
     echo "[OK] Stopped $name (PID $pid)"
   else
     echo "[INFO] $name PID file existed but process was not running"
@@ -75,10 +72,7 @@ status_bg() {
   fi
 }
 
-logs_bg() {
-  local name="$1"
-  tail -n 80 "$LOG_DIR/${name}.log"
-}
+logs_bg() { local name="$1"; tail -n 120 "$LOG_DIR/${name}.log"; }
 
 controller_bootstrap() {
   bash "$ROOT_DIR/scripts/fix_permissions.sh"
@@ -102,6 +96,10 @@ dashboard_bootstrap() {
 }
 dashboard_start() {
   bash "$ROOT_DIR/scripts/fix_permissions.sh"
+  if [ ! -f "$ROOT_DIR/.venv-dashboard/bin/activate" ]; then
+    echo "[ERROR] .venv-dashboard not found. Run: bash manage.sh dashboard bootstrap" >&2
+    exit 1
+  fi
   start_bg dashboard bash -lc "cd '$ROOT_DIR' && source '$ROOT_DIR/.venv-dashboard/bin/activate' && python dashboard/flask_dashboard/app.py"
 }
 dashboard_stop() { stop_bg dashboard; }
@@ -121,36 +119,16 @@ dataplane_start() {
   cd "$ROOT_DIR/vm-a2-dataplane"
   CTRL_IP="$CTRL_IP" bash ./run_mininet.sh
 }
-dataplane_status() {
-  echo "[INFO] Dataplane runs interactively via Mininet; no background PID is tracked by default."
-}
+dataplane_status() { echo "[INFO] Dataplane runs interactively via Mininet; no background PID is tracked by default."; }
 
-stack_bootstrap() {
-  controller_bootstrap
-  dashboard_bootstrap
-}
-stack_start() {
-  controller_start
-  dashboard_start
-  stack_status
-}
-stack_stop() {
-  dashboard_stop || true
-  controller_stop || true
-}
-stack_restart() {
-  stack_stop || true
-  stack_start
-}
-stack_status() {
-  controller_status || true
-  dashboard_status || true
-}
+stack_bootstrap() { controller_bootstrap; dashboard_bootstrap; }
+stack_start() { controller_start; dashboard_start; stack_status; }
+stack_stop() { dashboard_stop || true; controller_stop || true; }
+stack_restart() { stack_stop || true; stack_start; }
+stack_status() { controller_status || true; dashboard_status || true; }
 
 case "$role" in
-  fix-perms)
-    fix_perms
-    ;;
+  fix-perms) fix_perms ;;
   controller)
     case "$action" in
       bootstrap) controller_bootstrap ;;
@@ -160,8 +138,7 @@ case "$role" in
       status) controller_status ;;
       logs) controller_logs ;;
       *) usage; exit 1 ;;
-    esac
-    ;;
+    esac ;;
   dashboard)
     case "$action" in
       bootstrap) dashboard_bootstrap ;;
@@ -171,16 +148,14 @@ case "$role" in
       status) dashboard_status ;;
       logs) dashboard_logs ;;
       *) usage; exit 1 ;;
-    esac
-    ;;
+    esac ;;
   dataplane)
     case "$action" in
       bootstrap) dataplane_bootstrap ;;
       start) dataplane_start ;;
       status) dataplane_status ;;
       *) usage; exit 1 ;;
-    esac
-    ;;
+    esac ;;
   stack)
     case "$action" in
       bootstrap) stack_bootstrap ;;
@@ -189,10 +164,6 @@ case "$role" in
       restart) stack_restart ;;
       status) stack_status ;;
       *) usage; exit 1 ;;
-    esac
-    ;;
-  *)
-    usage
-    exit 1
-    ;;
+    esac ;;
+  *) usage; exit 1 ;;
 esac

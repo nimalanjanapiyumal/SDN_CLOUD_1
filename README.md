@@ -1,85 +1,56 @@
-# SDN Hybrid OpenStack Project (Direct Deploy Fixed)
+# SDN-Based Adaptive Cloud Network Management Framework (Fresh Deployable Package)
 
-> Important after extracting the archive:
-> ```bash
-> bash manage.sh fix-perms
-> ```
->
-> Then use the single launcher:
-> ```bash
-> bash manage.sh controller bootstrap
-> bash manage.sh controller start
-> ```
-
-
-# SDN Hybrid Load Balancing Framework for OpenStack + Mininet
-
-Ready-to-deploy project package for:
-- OpenStack-backed cloud testbed
-- Ryu SDN controller
-- Hybrid RR + Genetic Algorithm load balancing
+This package is a fresh deployable version of your project for:
+- OpenStack-based cloud testbed
+- SDN control plane with a hybrid Round Robin + Genetic Algorithm load balancer
 - Prometheus/Grafana monitoring
 - Flask operator dashboard
-- PyCharm + Git workflow
+- Mininet dataplane emulation
 
-## What changed in this ready package
-- Fixed the controller-side overload/stickiness logic by using explicit backend `max_connections` instead of normalizing by current maximum active connections.
-- Split controller, dashboard, and dataplane dependencies so the dashboard venv does **not** try to install Ryu.
-- Added an automated **patched Ryu installer** for Python 3.10+ that pins a compatible `pip/setuptools/wheel/packaging/pbr` toolchain before installing Ryu.
-- Added ready bootstrap scripts for controller, dataplane, and dashboard VMs.
+## Important implementation note
+The original project used Ryu. This package runs the controller on **OS-Ken**, which is the OpenStack-maintained fork of Ryu and keeps the same overall controller model for this project. This avoids the repeated Ryu packaging failures on Python 3.10.
 
 ## Folder layout
-- `vm-a1-controller/` - Ryu app, hybrid algorithm, REST API, controller config
-- `vm-a2-dataplane/` - Mininet topology and traffic tools
-- `dashboard/flask_dashboard/` - operator dashboard for controller and OpenStack status
-- `scripts/` - VM bootstrap and patched Ryu installer
-- `prometheus/` - Prometheus scrape config
-- `dashboard/grafana/` - example Grafana dashboard JSON
-- `tests/` - smoke tests for hybrid logic
-- `docs/` - deployment guides
+- `vm-a1-controller/` controller code, config, runner
+- `vm-a2-dataplane/` Mininet topology and test tools
+- `dashboard/` Flask dashboard and Grafana JSON
+- `scripts/` bootstrap and helper scripts
+- `prometheus/` Prometheus scrape config
+- `docs/` complete run steps
+- `manage.sh` one-command launcher per role
+- `start_parallel.sh` bootstrap+start controller and dashboard on the same VM
 
-## Fast deployment
+## Fastest path
 ### Controller VM
 ```bash
-cd /home/user/CLOUD_1/SDN_CLOUD_1
-bash scripts/bootstrap_controller_vm.sh
-source .venv-controller/bin/activate
-cd vm-a1-controller
-./run_controller.sh
-```
-
-### Data-plane VM
-```bash
-cd /home/user/CLOUD_1/SDN_CLOUD_1
-bash scripts/bootstrap_dataplane_vm.sh
-cd vm-a2-dataplane
-CTRL_IP=<controller-private-ip> ./run_mininet.sh
-```
-
-### Dashboard VM (or same controller VM)
-```bash
-cd /home/user/CLOUD_1/SDN_CLOUD_1
-bash scripts/bootstrap_dashboard_vm.sh
-source .venv-dashboard/bin/activate
-export CONTROLLER_API_URL=http://<controller-private-ip>:8080
-python dashboard/flask_dashboard/app.py
-```
-
-Open the dashboard at `http://<vm-ip>:5000`.
-
-
-## Safer startup commands
-```bash
+cd /home/user/SDN_CLOUD_1
+bash manage.sh fix-perms
 bash manage.sh controller bootstrap
 bash manage.sh controller start
+bash manage.sh controller status
 bash manage.sh controller logs
 ```
 
-To start controller + dashboard on the same VM:
+### Dashboard VM (or same VM)
 ```bash
-bash start_parallel.sh
+cd /home/user/SDN_CLOUD_1
+bash manage.sh dashboard bootstrap
+export CONTROLLER_API_URL=http://<controller-ip>:8080
+bash manage.sh dashboard start
+bash manage.sh dashboard logs
 ```
 
+### Dataplane VM
+```bash
+cd /home/user/SDN_CLOUD_1
+bash manage.sh dataplane bootstrap
+CTRL_IP=<controller-ip> bash manage.sh dataplane start
+```
 
-## Ryu toolchain note
-The controller bootstrap now pins `setuptools==68.2.2` and `packaging==24.2` before installing Ryu. This avoids the `canonicalize_version(... strip_trailing_zero ...)` failure seen with newer `setuptools` combinations.
+Then inside Mininet:
+```bash
+h1 curl http://10.0.0.100:8000
+h1 python3 tools/http_benchmark.py --url http://10.0.0.100:8000 --concurrency 20 --duration 15 --sla-ms 200
+```
+
+See `docs/COMPLETE_STEPS.md` for the full runbook.
