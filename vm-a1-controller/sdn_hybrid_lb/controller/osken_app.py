@@ -11,25 +11,24 @@ from os_ken.lib.packet import packet
 from os_ken.lib.packet import ethernet, arp, ipv4, tcp, udp
 from os_ken.lib.packet import ether_types
 from os_ken.ofproto import ofproto_v1_3
+from os_ken.app.wsgi import WSGIApplication
 
 from sdn_hybrid_lb.utils.config import load_config
 from sdn_hybrid_lb.utils.logging import setup_logger
 from sdn_hybrid_lb.algorithms.hybrid import HybridLoadBalancer, FlowKey
 from sdn_hybrid_lb.controller.flow_manager import FlowManager
+from sdn_hybrid_lb.controller.rest_api import LBRestController
 from sdn_hybrid_lb.monitoring.prometheus import PrometheusProvider, PrometheusConfig
-from sdn_hybrid_lb.controller.rest_server import start_rest_server
 
 
-BaseOSKenApp = getattr(app_manager, "OSKenApp", None) or getattr(app_manager, "RyuApp", None) or object
-
-
-class HybridLoadBalancerRyuApp(BaseOSKenApp):
+class HybridLoadBalancerRyuApp(app_manager.RyuApp):
     """Ryu SDN controller app implementing VIP-based hybrid load balancing."""
 
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
+    _CONTEXTS = {"wsgi": WSGIApplication}
+
     def __init__(self, *args, **kwargs):
-        if BaseOSKenApp is not object:
-            super().__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         self.logger = setup_logger("sdn_hybrid_lb")
 
@@ -57,13 +56,11 @@ class HybridLoadBalancerRyuApp(BaseOSKenApp):
             )
             self.logger.info("Prometheus provider enabled: %s", self.cfg.monitoring.prometheus.base_url)
 
-        # Standalone REST API thread (newer OS-Ken releases no longer bundle the old WSGI stack)
-        self._rest_server = None
-        try:
-            self._rest_server = start_rest_server(self, host="0.0.0.0", port=self.cfg.controller.rest_api_port)
-            self.logger.info("REST API started on port %s", self.cfg.controller.rest_api_port)
-        except Exception as e:
-            self.logger.exception("Failed to start REST API server: %s", e)
+        # REST API registration
+        wsgi = kwargs.get("wsgi")
+        if wsgi:
+            wsgi.register(LBRestController, {"app": self})
+            self.logger.info("REST API registered on port %s", self.cfg.controller.rest_api_port)
 
         # Monitoring thread
         self._monitor_thread = hub.spawn(self._monitor)

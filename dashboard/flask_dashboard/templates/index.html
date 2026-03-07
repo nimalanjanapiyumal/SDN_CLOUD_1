@@ -1,169 +1,63 @@
+
 <!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SDN Hybrid LB Dashboard</title>
   <style>
-    :root {
-      --bg: #0b1020; --panel:#141b34; --panel2:#10162a; --text:#e8ecf8; --muted:#9aa6c2;
-      --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --accent:#60a5fa; --border:#243152;
-    }
-    * { box-sizing:border-box; }
-    body { margin:0; font-family: Inter, Arial, sans-serif; background:linear-gradient(180deg,#0b1020,#0f172a); color:var(--text); }
-    .wrap { max-width: 1320px; margin: 0 auto; padding: 24px; }
-    h1,h2,h3 { margin:0 0 12px; }
-    p, li { color: var(--muted); }
-    code { background:#0b1224; color:#dbeafe; padding:2px 6px; border-radius:8px; }
-    .hero { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:20px; }
-    .hero .title { max-width:900px; }
-    .pill { display:inline-block; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:700; }
-    .ok { background:rgba(34,197,94,.15); color:#86efac; border:1px solid rgba(34,197,94,.4); }
-    .warn { background:rgba(245,158,11,.15); color:#fcd34d; border:1px solid rgba(245,158,11,.35); }
-    .bad { background:rgba(239,68,68,.15); color:#fca5a5; border:1px solid rgba(239,68,68,.35); }
-    .cards { display:grid; grid-template-columns:repeat(5,1fr); gap:16px; margin: 16px 0 24px; }
-    .card, .panel { background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid var(--border); border-radius:18px; padding:18px; box-shadow:0 10px 30px rgba(0,0,0,.18); }
-    .metric { font-size:28px; font-weight:800; margin-top:8px; }
-    .sub { font-size:13px; color:var(--muted); }
-    .grid { display:grid; grid-template-columns: 1.2fr 1fr; gap:20px; }
-    .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-top:20px; }
-    .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
-    button, select { background:#17213f; color:var(--text); border:1px solid #30406b; border-radius:10px; padding:10px 14px; }
-    button:hover { border-color:#60a5fa; cursor:pointer; }
-    table { width:100%; border-collapse: collapse; }
-    th, td { text-align:left; padding:10px 8px; border-bottom:1px solid rgba(154,166,194,.14); vertical-align:top; }
-    th { color:#c7d2fe; font-size:13px; }
-    .badge { font-size:12px; font-weight:700; padding:4px 8px; border-radius:999px; display:inline-block; }
-    .bar { height:10px; background:#0b1224; border-radius:999px; overflow:hidden; border:1px solid #25355d; }
-    .fill { height:100%; background:linear-gradient(90deg,#38bdf8,#818cf8); }
-    .small { font-size:12px; color:var(--muted); }
-    .warning-box { margin-top:14px; padding:14px; border-radius:14px; border:1px dashed #f59e0b; background:rgba(245,158,11,.08); }
-    .danger-box { margin-top:14px; padding:14px; border-radius:14px; border:1px dashed #ef4444; background:rgba(239,68,68,.08); }
-    @media (max-width: 1100px) { .cards { grid-template-columns: repeat(2,1fr); } .grid, .grid-2 { grid-template-columns: 1fr; } }
-    @media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
+    code { background: #f6f6f6; padding: 2px 6px; border-radius: 6px; }
   </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="hero">
-    <div class="title">
-      <h1>SDN Hybrid Load Balancer Dashboard</h1>
-      <p>Controller API <code>{{ api_url }}</code> · Generated {{ generated_at }}</p>
-      <p>This dashboard highlights controller health, backend state, OpenStack visibility, and the testing metrics required for section 3.1.5.</p>
-    </div>
-    <div>
-      {% if error %}
-        <span class="pill bad">Controller API unreachable</span>
-      {% else %}
-        <span class="pill ok">Controller API healthy</span>
-      {% endif %}
-      {% if openstack_state == 'connected' %}
-        <span class="pill ok">OpenStack connected</span>
-      {% elif openstack_state == 'not-configured' %}
-        <span class="pill warn">OpenStack not configured</span>
-      {% elif openstack_state == 'sdk-missing' %}
-        <span class="pill warn">OpenStack SDK missing</span>
-      {% else %}
-        <span class="pill bad">OpenStack error</span>
-      {% endif %}
-    </div>
-  </div>
-
+  <h1>SDN Hybrid LB Dashboard</h1>
+  <p>Controller API: <code>{{ api_url }}</code></p>
   {% if error %}
-    <div class="danger-box"><strong>Controller error:</strong> {{ error }}</div>
+    <div class="card"><strong>Controller error:</strong> {{ error }}</div>
   {% endif %}
-
-  <div class="cards">
-    <div class="card"><div class="sub">Backends</div><div class="metric">{{ summary.get('backend_count', 0) }}</div><div class="sub">Configured service nodes</div></div>
-    <div class="card"><div class="sub">Healthy backends</div><div class="metric">{{ summary.get('healthy_count', 0) }}</div><div class="sub">Unhealthy: {{ summary.get('unhealthy_count', 0) }}</div></div>
-    <div class="card"><div class="sub">Active flows</div><div class="metric">{{ summary.get('active_flows', 0) }}</div><div class="sub">Live flow bindings in controller</div></div>
-    <div class="card"><div class="sub">Aggregate throughput</div><div class="metric">{{ summary.get('total_throughput_mbps', 0) }} Mbps</div><div class="sub">From port-stat based monitoring</div></div>
-    <div class="card"><div class="sub">Selection mode</div><div class="metric" style="font-size:20px;">{{ summary.get('rr_mode', 'n/a') }}</div><div class="sub">Fast path + GA weighting</div></div>
-  </div>
-
   <div class="grid">
-    <div class="panel">
-      <h2>Controller and backend status</h2>
-      <div class="actions">
-        <form method="post" action="/recompute"><button type="submit">Force GA recompute</button></form>
-      </div>
-      <table>
-        <tr><th>Backend</th><th>Health</th><th>CPU</th><th>Memory</th><th>Bandwidth</th><th>Throughput</th><th>Connections</th><th>Control</th></tr>
-        {% for b in controller.get('backends', []) %}
-        {% set m = b.get('metrics', {}) %}
-        <tr>
-          <td><strong>{{ b.name }}</strong><div class="small">{{ b.ip }} · port {{ b.port }}</div></td>
-          <td>{% if b.healthy %}<span class="badge ok">healthy</span>{% else %}<span class="badge bad">down</span>{% endif %}</td>
-          <td><div class="small">{{ '%.1f'|format((m.get('cpu_util') or 0) * 100) }}%</div><div class="bar"><div class="fill" style="width: {{ ((m.get('cpu_util') or 0) * 100)|round(1) }}%"></div></div></td>
-          <td><div class="small">{{ '%.1f'|format((m.get('mem_util') or 0) * 100) }}%</div><div class="bar"><div class="fill" style="width: {{ ((m.get('mem_util') or 0) * 100)|round(1) }}%"></div></div></td>
-          <td><div class="small">{{ '%.1f'|format((m.get('bw_util') or 0) * 100) }}%</div><div class="bar"><div class="fill" style="width: {{ ((m.get('bw_util') or 0) * 100)|round(1) }}%"></div></div></td>
-          <td>{{ '%.2f'|format(m.get('throughput_mbps') or 0) }} Mbps</td>
-          <td>{{ m.get('active_connections', 0) }}</td>
-          <td>
-            <form method="post" action="/backend/{{ b.name }}/health">
-              <select name="healthy">
-                <option value="true">healthy</option>
-                <option value="false">down</option>
-              </select>
-              <button type="submit">Apply</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-      </table>
-      <div class="warning-box">
-        <strong>VIP connectivity note:</strong> <code>10.0.0.100:8000</code> is reachable from the <strong>Mininet client host h1</strong>, not from the controller VM shell. Test it inside Mininet with <code>h1 curl http://10.0.0.100:8000</code>.
-      </div>
+    <div class="card">
+      <h2>Controller Status</h2>
+      <form method="post" action="/recompute">
+        <button type="submit">Force GA Recompute</button>
+      </form>
+      <p>Active flows: {{ controller.get('active_flows', 'n/a') }}</p>
+      <pre>{{ controller | tojson(indent=2) }}</pre>
     </div>
-
-    <div class="panel">
-      <h2>OpenStack visibility</h2>
-      {% if openstack_message %}
-        <div class="warning-box"><strong>{{ openstack_state }}</strong><br>{{ openstack_message }}</div>
-      {% endif %}
+    <div class="card">
+      <h2>OpenStack Servers</h2>
       <table>
-        <tr><th>Name</th><th>Status</th><th>Addresses</th></tr>
+        <tr><th>Name</th><th>Status</th></tr>
         {% for s in servers %}
-        <tr><td>{{ s.name }}</td><td>{{ s.status }}</td><td>{{ s.addresses }}</td></tr>
-        {% endfor %}
-      </table>
-      <div class="small" style="margin-top:12px;">
-        Set either <code>OS_CLOUD</code> with a valid <code>clouds.yaml</code> profile, or export Keystone variables such as <code>OS_AUTH_URL</code>, <code>OS_USERNAME</code>, <code>OS_PASSWORD</code>, and <code>OS_PROJECT_NAME</code>.
-      </div>
-    </div>
-  </div>
-
-  <div class="grid-2">
-    <div class="panel">
-      <h2>Testing and evaluation plan</h2>
-      <table>
-        <tr><th>Test area</th><th>Goal</th><th>Command</th><th>Metrics</th></tr>
-        {% for t in testing_plan %}
-        <tr>
-          <td><strong>{{ t.name }}</strong></td>
-          <td>{{ t.goal }}</td>
-          <td><code>{{ t.command }}</code></td>
-          <td>{{ t.metrics }}</td>
-        </tr>
+        <tr><td>{{ s.name }}</td><td>{{ s.status }}</td></tr>
         {% endfor %}
       </table>
     </div>
-
-    <div class="panel">
-      <h2>Required metrics for section 3.1.5</h2>
-      <table>
-        <tr><th>Category</th><th>Metrics</th></tr>
-        <tr><td>Functional testing</td><td>Controller API health, VIP ARP response, backend JSON reply, health toggle effect, GA recompute success</td></tr>
-        <tr><td>Performance</td><td>HTTP req/s, p50 latency, p95 latency, error rate, SLA compliance %, active flows</td></tr>
-        <tr><td>Scalability</td><td>Throughput under concurrency 10 / 20 / 50, backend distribution balance, bandwidth utilization</td></tr>
-        <tr><td>Resource usage</td><td>Per-backend CPU %, memory %, bandwidth %, active connections, aggregate throughput Mbps</td></tr>
-        <tr><td>Fault tolerance</td><td>Service continuity after backend failure, traffic shift time, reduced but stable throughput, error spike duration</td></tr>
-      </table>
-      <div class="warning-box">
-        Prometheus is optional. Even without it, the controller already exposes flow count and bandwidth-derived metrics using OpenFlow port statistics. Prometheus adds CPU and memory utilization per backend when you map exporter instances in <code>config.controller.yaml</code>.
-      </div>
-    </div>
   </div>
-</div>
+  <div class="card" style="margin-top:20px;">
+    <h2>Backend Health Controls</h2>
+    <table>
+      <tr><th>Backend</th><th>Healthy</th><th>Action</th></tr>
+      {% for b in controller.get('backends', []) %}
+      <tr>
+        <td>{{ b.name }}</td>
+        <td>{{ b.healthy }}</td>
+        <td>
+          <form method="post" action="/backend/{{ b.name }}/health">
+            <select name="healthy">
+              <option value="true">true</option>
+              <option value="false">false</option>
+            </select>
+            <button type="submit">Update</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
 </body>
 </html>
