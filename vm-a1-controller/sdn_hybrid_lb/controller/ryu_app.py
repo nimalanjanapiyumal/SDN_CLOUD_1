@@ -9,7 +9,7 @@ from ryu.controller import ofp_event
 from ryu.controller.handler import MAIN_DISPATCHER, CONFIG_DISPATCHER, DEAD_DISPATCHER, set_ev_cls
 from ryu.lib import hub
 from ryu.lib.packet import packet
-from ryu.lib.packet import ethernet, arp, ipv4, tcp, udp
+from ryu.lib.packet import ethernet, arp, ipv4, tcp, udp, icmp
 from ryu.lib.packet import ether_types
 from ryu.ofproto import ofproto_v1_3
 from ryu.app.wsgi import WSGIApplication
@@ -159,7 +159,7 @@ class HybridLoadBalancerRyuApp(app_manager.RyuApp):
             return
         ip_pkt = pkt.get_protocol(ipv4.ipv4)
         if ip_pkt and ip_pkt.dst == self.lb.vip.ip:
-            ip_proto = ip_pkt.proto
+            ip_proto = int(ip_pkt.proto)
             if ip_proto == 6:
                 t = pkt.get_protocol(tcp.tcp)
                 if not t:
@@ -170,17 +170,21 @@ class HybridLoadBalancerRyuApp(app_manager.RyuApp):
                 if not u:
                     return
                 l4_src, l4_dst = int(u.src_port), int(u.dst_port)
+            elif ip_proto == 1:
+                i = pkt.get_protocol(icmp.icmp)
+                l4_src = int(getattr(i, 'type', 8) if i else 8)
+                l4_dst = int(getattr(i, 'code', 0) if i else 0)
             else:
                 return
-            flow: FlowKey = (str(ip_pkt.src), l4_src, l4_dst, int(ip_proto))
+            flow: FlowKey = (str(ip_pkt.src), l4_src, l4_dst, ip_proto)
             backend = self.lb.choose_backend(flow)
             if not backend:
                 self.logger.warning('No eligible backend for flow=%s', flow)
                 return
             buffer_id = msg.buffer_id if msg.buffer_id != ofproto.OFP_NO_BUFFER else None
             raw_packet = b'' if buffer_id is not None else msg.data
-            self.flow_mgr.install_vip_rewrite_flows(datapath=dp, client_in_port=in_port, client_out_port=in_port, backend_out_port=backend.port, vip_ip=self.lb.vip.ip, vip_mac=self.lb.vip.mac, backend_ip=backend.ip, backend_mac=backend.mac, client_ip=str(ip_pkt.src), ip_proto=int(ip_proto), l4_src=l4_src, l4_dst=l4_dst, idle_timeout=self.cfg.controller.flow_idle_timeout, hard_timeout=self.cfg.controller.flow_hard_timeout, buffer_id=buffer_id, raw_packet=raw_packet)
-            self.logger.info('LB flow installed: client=%s:%s -> VIP:%s proto=%s => %s(%s)', ip_pkt.src, l4_src, l4_dst, ip_proto, backend.name, backend.ip)
+            self.flow_mgr.install_vip_rewrite_flows(datapath=dp, client_in_port=in_port, client_out_port=in_port, backend_out_port=backend.port, vip_ip=self.lb.vip.ip, vip_mac=self.lb.vip.mac, backend_ip=backend.ip, backend_mac=backend.mac, client_ip=str(ip_pkt.src), ip_proto=ip_proto, l4_src=l4_src, l4_dst=l4_dst, idle_timeout=self.cfg.controller.flow_idle_timeout, hard_timeout=self.cfg.controller.flow_hard_timeout, buffer_id=buffer_id, raw_packet=raw_packet)
+            self.logger.info('LB flow installed: client=%s flow=%s proto=%s => %s(%s)', ip_pkt.src, (l4_src, l4_dst), ip_proto, backend.name, backend.ip)
             return
         out_port = self.mac_to_port[dpid].get(eth.dst, ofproto.OFPP_FLOOD)
         self.flow_mgr.send_packet_out(dp, in_port, [parser.OFPActionOutput(out_port)], msg.data)

@@ -43,8 +43,8 @@ def main():
         h.cmd("pkill -f 'iperf3 -s -p 5201' || true")
         h.cmd("nohup iperf3 -s -p 5201 >/tmp/iperf_%s.log 2>&1 &" % name)
     info('*** Mininet started. VIP is 10.0.0.100 (handled by controller)\n')
-    info('*** Verify OpenFlow: ovs-vsctl show ; ovs-ofctl -O OpenFlow13 dump-flows s1\n')
-    info('*** Test VIP: h1 ping -c 2 10.0.0.100 ; h1 curl http://10.0.0.100:8000\n')
+    info('*** Verify OpenFlow from Mininet CLI: sh ovs-vsctl show ; sh ovs-ofctl -O OpenFlow13 dump-flows s1\n')
+    info('*** Test VIP: h1 ping -c 2 10.0.0.100 ; h1 curl http://10.0.0.100:8000 ; h1 ip neigh show\n')
     CLI(net); net.stop()
 
 if __name__ == '__main__':

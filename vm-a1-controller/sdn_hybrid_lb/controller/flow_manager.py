@@ -107,6 +107,8 @@ class FlowManager:
             match_fwd_kwargs.update(tcp_src=l4_src, tcp_dst=l4_dst)
         elif ip_proto == 17:  # UDP
             match_fwd_kwargs.update(udp_src=l4_src, udp_dst=l4_dst)
+        elif ip_proto == 1:  # ICMP
+            match_fwd_kwargs.update(icmpv4_type=l4_src, icmpv4_code=l4_dst)
         match_fwd = parser.OFPMatch(**match_fwd_kwargs)
 
         actions_fwd = [
@@ -127,6 +129,8 @@ class FlowManager:
             match_rev_kwargs.update(tcp_src=l4_dst, tcp_dst=l4_src)
         elif ip_proto == 17:
             match_rev_kwargs.update(udp_src=l4_dst, udp_dst=l4_src)
+        elif ip_proto == 1:
+            match_rev_kwargs.update(icmpv4_type=0, icmpv4_code=0)
         match_rev = parser.OFPMatch(**match_rev_kwargs)
 
         actions_rev = [

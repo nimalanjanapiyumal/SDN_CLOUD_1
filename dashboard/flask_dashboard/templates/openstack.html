@@ -1,1 +1,39 @@
-{% extends 'base.html' %}{% block content %}<div class="page-header"><h1>OpenStack Visibility</h1><p>Configuration status and instance discovery for the cloud layer.</p></div><div class="card">{% if info.error %}<div class="banner warn">{{ info.error }}</div>{% endif %}<h3>Environment checklist</h3><table class="table"><tr><th>Variable</th><th>Present</th></tr>{% for k,v in info.present.items() %}<tr><td>{{k}}</td><td>{{ 'Yes' if v else 'No' }}</td></tr>{% endfor %}</table><p class="muted">Set either OS_CLOUD with a valid clouds.yaml profile, or export Keystone variables such as OS_AUTH_URL, OS_USERNAME, OS_PASSWORD, and OS_PROJECT_NAME.</p></div><div class="card"><h3>OpenStack Servers</h3><table class="table"><tr><th>Name</th><th>Status</th><th>Addresses</th></tr>{% if info.servers %}{% for s in info.servers %}<tr><td>{{s.name}}</td><td>{{s.status}}</td><td>{{s.addresses}}</td></tr>{% endfor %}{% else %}<tr><td colspan="3">No servers visible yet.</td></tr>{% endif %}</table></div>{% endblock %}
+
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-header"><h1>OpenStack Visibility</h1><p>Configuration status, saved credentials, and instance discovery for the cloud layer.</p></div>
+{% if info.error %}<div class="banner warn">{{ info.error }}</div>{% endif %}
+<div class="cards two">
+  <div class="card">
+    <h3>Environment checklist</h3>
+    <table class="table"><tr><th>Variable</th><th>Present</th><th>Current value</th></tr>
+      {% for k,v in info.present.items() %}
+      <tr><td>{{k}}</td><td>{{ 'Yes' if v else 'No' }}</td><td>{{ info.values[k] or '-' }}</td></tr>
+      {% endfor %}
+    </table>
+    <p class="muted">Source: {{ info.source }}. OS_USER_DOMAIN_NAME and OS_PROJECT_DOMAIN_NAME stay at <strong>Default</strong> unless you override them.</p>
+  </div>
+  <div class="card">
+    <h3>Configure OpenStack for the dashboard</h3>
+    <form method="post" action="{{ url_for('openstack_save') }}" class="stack-form">
+      <label>OS_CLOUD<input type="text" name="OS_CLOUD" value="{{ info.values['OS_CLOUD'] }}" placeholder="mycloud"></label>
+      <label>OS_AUTH_URL<input type="text" name="OS_AUTH_URL" value="{{ info.values['OS_AUTH_URL'] }}" placeholder="http://controller:5000/v3"></label>
+      <label>OS_USERNAME<input type="text" name="OS_USERNAME" value="{{ info.values['OS_USERNAME'] }}" placeholder="admin"></label>
+      <label>OS_PASSWORD<input type="password" name="OS_PASSWORD" value="" placeholder="Leave blank to keep current password"></label>
+      <label>OS_PROJECT_NAME<input type="text" name="OS_PROJECT_NAME" value="{{ info.values['OS_PROJECT_NAME'] }}" placeholder="admin"></label>
+      <div class="form-row">
+        <label>OS_USER_DOMAIN_NAME<input type="text" name="OS_USER_DOMAIN_NAME" value="{{ info.values['OS_USER_DOMAIN_NAME'] or 'Default' }}"></label>
+        <label>OS_PROJECT_DOMAIN_NAME<input type="text" name="OS_PROJECT_DOMAIN_NAME" value="{{ info.values['OS_PROJECT_DOMAIN_NAME'] or 'Default' }}"></label>
+      </div>
+      <div class="btn-row"><button class="btn" type="submit">Save OpenStack settings</button></div>
+    </form>
+    <form method="post" action="{{ url_for('openstack_clear') }}"><button class="btn muted" type="submit">Clear saved OpenStack settings</button></form>
+  </div>
+</div>
+<div class="card">
+  <h3>OpenStack Servers</h3>
+  <table class="table"><tr><th>Name</th><th>Status</th><th>Addresses</th></tr>
+  {% if info.servers %}{% for s in info.servers %}<tr><td>{{s.name}}</td><td>{{s.status}}</td><td>{{s.addresses}}</td></tr>{% endfor %}{% else %}<tr><td colspan="3">No servers visible yet.</td></tr>{% endif %}
+  </table>
+</div>
+{% endblock %}
