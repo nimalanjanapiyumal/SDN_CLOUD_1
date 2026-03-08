@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
-mods=['yaml','ryu','webob','eventlet','netaddr','requests']
-missing=[]
-for m in mods:
-    try:
-        __import__(m)
-    except Exception:
+import importlib.util
+import warnings
+
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+
+required = ['yaml', 'ryu', 'webob', 'netaddr', 'requests']
+optional = ['eventlet']
+missing = []
+for m in required:
+    if importlib.util.find_spec(m) is None:
+        missing.append(m)
+for m in optional:
+    if importlib.util.find_spec(m) is None:
         missing.append(m)
 if missing:
     raise SystemExit('Missing controller modules: ' + ', '.join(missing))

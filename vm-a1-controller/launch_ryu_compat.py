@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import os, sys
+import os, sys, warnings
+
+warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 def patch_eventlet():
     try:
