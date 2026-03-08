@@ -1,8 +1,105 @@
-async function fetchStatus(){const r=await fetch('/api/status');return await r.json();}
-function pct(v){if(v===null||v===undefined)return 'n/a';return Math.round(v*100)+'%';}
-function fmtTs(v){if(!v)return 'n/a';return new Date(v*1000).toLocaleTimeString();}
-function backendCard(b){return `<div class="backend-card"><div style="display:flex;justify-content:space-between;align-items:center"><strong>${b.name}</strong><span class="pill ${b.healthy?'ok':'bad'}">${b.healthy?'Healthy':'Down'}</span></div><div class="muted">${b.ip} · port ${b.port}</div><div style="margin-top:12px">CPU ${pct(b.metrics.cpu_util)}<div class="bar"><span style="width:${Math.round((b.metrics.cpu_util||0)*100)}%"></span></div></div><div style="margin-top:8px">Memory ${pct(b.metrics.mem_util)}<div class="bar"><span style="width:${Math.round((b.metrics.mem_util||0)*100)}%"></span></div></div><div style="margin-top:8px">Bandwidth ${pct(b.metrics.bw_util)}<div class="bar"><span style="width:${Math.round((b.metrics.bw_util||0)*100)}%"></span></div></div><div style="margin-top:8px" class="muted">Active conn: ${b.metrics.active_connections} · Throughput: ${b.metrics.throughput_mbps ?? 'n/a'} Mbps</div></div>`}
-async function hydrateOverview(){const api=document.getElementById('apiStatus'); if(!api) return; const err=document.getElementById('errorBanner'); try{const s=await fetchStatus(); api.textContent=s._ok?'OK':'DOWN'; document.getElementById('ofStatus').textContent=(s.controller_runtime&&s.controller_runtime.openflow_connected)?'Connected':'Disconnected'; document.getElementById('dpCount').textContent=(s.controller_runtime&&s.controller_runtime.datapaths_connected)||0; document.getElementById('activeFlows').textContent=s.active_flows||0; document.getElementById('vipBox').innerHTML=`<div><strong>${s.vip?.ip||'10.0.0.100'}</strong><div class='muted'>VIP MAC: ${s.vip?.mac||'n/a'}</div></div>`; document.getElementById('runtimeBox').innerHTML=`<div>OpenFlow port: ${(s.controller_runtime||{}).openflow_port||'6633'}</div><div>REST port: ${(s.controller_runtime||{}).rest_port||'8080'}</div><div>Last packet-in: ${fmtTs((s.controller_runtime||{}).last_packet_in_at)}</div><div>Last port stats: ${fmtTs((s.controller_runtime||{}).last_port_stats_at)}</div>`; document.getElementById('backendGrid').innerHTML=(s.backends||[]).map(backendCard).join(''); if(!s._ok){err.classList.remove('hidden');err.textContent=s.error||'Controller API unavailable';} else {err.classList.add('hidden');}}catch(e){err.classList.remove('hidden');err.textContent=e.toString();}}
-function renderBars(el, rows, key, suffix=''){if(!el)return;if(!rows||!rows.length){el.innerHTML='<div class="muted">No uploaded results yet.</div>';return;}const max=Math.max(...rows.map(r=>Number(r[key]||0)),1);el.innerHTML=rows.map(r=>`<div class="row"><div class="name">${r.label}</div><div class="track"><div class="fill" style="width:${(Number(r[key]||0)/max)*100}%"></div></div><div class="value">${r[key]}${suffix}</div></div>`).join('');}
-function hydrateTesting(){if(document.getElementById('httpChart')){const rows=(window.__httpRuns||[]).map(r=>({label:'c'+r.concurrency, req_per_sec:r.req_per_sec}));renderBars(document.getElementById('httpChart'),rows,'req_per_sec');}if(document.getElementById('iperfChart')){const rows=(window.__iperfRuns||[]).map(r=>({label:'P'+r.parallel, mbps:r.mbps}));renderBars(document.getElementById('iperfChart'),rows,'mbps',' Mbps');}}
-document.addEventListener('DOMContentLoaded',()=>{hydrateOverview();hydrateTesting();setInterval(hydrateOverview,3000);});
+
+function palette(i) {
+  const colors = ['#5b8cff', '#7cf0ff', '#2ed9a6', '#f7c75c', '#ff6b81', '#b18cff'];
+  return colors[i % colors.length];
+}
+
+function clearCanvas(ctx, canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, rect.width, rect.height);
+  return {w: rect.width, h: rect.height};
+}
+
+function drawAxes(ctx, w, h, maxValue, xLabels) {
+  const pad = {l: 46, r: 18, t: 18, b: 42};
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+  ctx.fillStyle = '#9db0da';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + ((h - pad.t - pad.b) * i / 4);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y); ctx.stroke();
+    const v = Math.round(maxValue * (1 - i / 4));
+    ctx.fillText(String(v), 10, y + 4);
+  }
+  const innerW = w - pad.l - pad.r;
+  xLabels.forEach((lab, idx) => {
+    const x = pad.l + innerW * (idx + 0.5) / Math.max(1, xLabels.length);
+    ctx.fillText(lab, x - 8, h - 16);
+  });
+  return pad;
+}
+
+function drawGroupedBars(canvas, payload, seriesKeys, seriesNames) {
+  const ctx = canvas.getContext('2d');
+  const {w, h} = clearCanvas(ctx, canvas);
+  const labels = payload.backend_labels || [];
+  const datasets = seriesKeys.map(k => payload[k] || []);
+  const maxValue = Math.max(100, ...datasets.flat(), 1);
+  const pad = drawAxes(ctx, w, h, maxValue, labels);
+  const innerW = w - pad.l - pad.r;
+  const innerH = h - pad.t - pad.b;
+  const groupWidth = innerW / Math.max(labels.length, 1);
+  const barWidth = Math.min(24, (groupWidth - 18) / Math.max(1, datasets.length));
+  datasets.forEach((data, sIdx) => {
+    ctx.fillStyle = palette(sIdx);
+    data.forEach((value, idx) => {
+      const x = pad.l + idx * groupWidth + 10 + sIdx * barWidth;
+      const barH = (value / maxValue) * innerH;
+      ctx.fillRect(x, h - pad.b - barH, barWidth - 4, barH);
+    });
+  });
+  seriesNames.forEach((name, i) => {
+    ctx.fillStyle = palette(i);
+    ctx.fillRect(w - 160, 20 + i * 18, 12, 12);
+    ctx.fillStyle = '#dfe8ff';
+    ctx.fillText(name, w - 140, 30 + i * 18);
+  });
+}
+
+function drawSingleBars(canvas, labels, values, title) {
+  const ctx = canvas.getContext('2d');
+  const {w, h} = clearCanvas(ctx, canvas);
+  const maxValue = Math.max(...values, 10);
+  const pad = drawAxes(ctx, w, h, maxValue, labels);
+  const innerW = w - pad.l - pad.r;
+  const innerH = h - pad.t - pad.b;
+  const barWidth = Math.min(42, innerW / Math.max(1, labels.length) - 18);
+  values.forEach((value, idx) => {
+    const groupX = pad.l + innerW * (idx + 0.5) / Math.max(1, labels.length);
+    const x = groupX - barWidth / 2;
+    const barH = (value / maxValue) * innerH;
+    ctx.fillStyle = palette(idx);
+    ctx.fillRect(x, h - pad.b - barH, barWidth, barH);
+  });
+}
+
+function initCharts() {
+  document.querySelectorAll('.chart-canvas').forEach((canvas) => {
+    const chartType = canvas.dataset.chart;
+    let payload = {};
+    try { payload = JSON.parse(canvas.dataset.payload || '{}'); } catch (e) {}
+    if (chartType === 'grouped-bars') {
+      drawGroupedBars(canvas, payload, ['cpu','mem','bw'], ['CPU %','Memory %','Bandwidth %']);
+    } else if (chartType === 'dual-bars') {
+      const ctxPayload = {backend_labels: payload.backend_labels || [], throughput: payload.throughput || [], active_conn: payload.active_conn || []};
+      drawGroupedBars(canvas, ctxPayload, ['throughput','active_conn'], ['Throughput Mbps','Active connections']);
+    } else if (chartType === 'weights') {
+      drawSingleBars(canvas, payload.backend_labels || [], payload.weights || [], 'Weights');
+    } else if (chartType === 'testing-throughput') {
+      drawSingleBars(canvas, payload.http_labels || [], payload.http_throughput || [], 'HTTP req/s');
+    } else if (chartType === 'testing-p95') {
+      drawSingleBars(canvas, payload.http_labels || [], payload.http_p95 || [], 'HTTP p95 ms');
+    } else if (chartType === 'testing-sla') {
+      drawSingleBars(canvas, payload.http_labels || [], payload.http_sla || [], 'SLA %');
+    } else if (chartType === 'testing-iperf') {
+      drawSingleBars(canvas, payload.iperf_labels || [], payload.iperf_throughput || [], 'iperf Mbps');
+    }
+  });
+}
+
+window.addEventListener('load', initCharts);
+window.addEventListener('resize', initCharts);

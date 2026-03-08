@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import os, sys, warnings
 
-warnings.filterwarnings('ignore', category=DeprecationWarning)
+import os
+import warnings
 
-def patch_eventlet():
-    try:
-        import eventlet.wsgi as ew
-        if not hasattr(ew, 'ALREADY_HANDLED'):
-            ew.ALREADY_HANDLED = object()
-    except Exception:
-        pass
+# Avoid Eventlet greendns import path which can pull an old dnspython build
+# incompatible with Python 3.10+ (collections.MutableMapping removal).
+os.environ.setdefault("EVENTLET_NO_GREENDNS", "yes")
 
-def main():
-    patch_eventlet()
-    ofp = os.environ.get('OFP_PORT', '6633')
-    rest = os.environ.get('REST_PORT', '8080')
-    app = os.environ.get('RYU_APP', 'sdn_hybrid_lb/controller/ryu_app.py')
-    sys.argv = ['ryu-manager', '--ofp-tcp-listen-port', str(ofp), '--wsapi-port', str(rest), app]
-    from ryu.cmd.manager import main as ryu_main
-    ryu_main()
+# Keep controller logs cleaner on newer Python/Eventlet stacks.
+warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"eventlet(\..*)?")
 
-if __name__ == '__main__':
+# Ryu 4.34 imports ryu.app.wsgi through ryu.cmd.manager.
+# Newer Eventlet releases removed eventlet.wsgi.ALREADY_HANDLED,
+# which makes that import fail. Patch the symbol before importing Ryu.
+try:
+    import eventlet.wsgi as _eventlet_wsgi
+    if not hasattr(_eventlet_wsgi, "ALREADY_HANDLED"):
+        _eventlet_wsgi.ALREADY_HANDLED = object()
+except Exception:
+    pass
+
+from ryu.cmd.manager import main
+
+if __name__ == "__main__":
     main()
